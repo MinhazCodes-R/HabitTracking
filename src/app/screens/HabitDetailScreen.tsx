@@ -1,28 +1,19 @@
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate, Navigate } from 'react-router';
 import { ArrowLeft, Droplet } from 'lucide-react';
 import { CalendarHeatmap } from '../components/CalendarHeatmap';
-import { useState } from 'react';
+import { useHabits } from '../context/HabitContext';
 
-// Mock data
-const habit = {
-  id: '1',
-  name: 'Drink Water',
-  category: 'health',
-  current: 1200,
-  goal: 2000,
-  unit: 'ml',
-};
-
-// Generate mock heatmap data
-const generateHeatmapData = () => {
+// Generate dynamic heatmap data
+const generateHeatmapData = (logs: any, habitId: string, goal: number) => {
   const data: Record<string, number> = {};
   const today = new Date();
   
   for (let i = 0; i < 84; i++) {
     const date = new Date(today);
-    date.setDate(date.getDate() - i);
+    date.setDate(today.getDate() - i);
     const dateStr = date.toISOString().split('T')[0];
-    data[dateStr] = Math.random();
+    const progress = logs[dateStr]?.[habitId] || 0;
+    data[dateStr] = Math.min((progress / goal) || 0, 1);
   }
   
   return data;
@@ -31,12 +22,22 @@ const generateHeatmapData = () => {
 export function HabitDetailScreen() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [current, setCurrent] = useState(habit.current);
+  const { habits, logs, getHabitProgress, logProgress } = useHabits();
+  
+  const habit = habits.find((h) => h.id === id);
+  
+  if (!habit) {
+    return <Navigate to="/home" replace />;
+  }
+  
+  const dateObj = new Date();
+  const todayDateStr = dateObj.toISOString().split('T')[0];
+  const current = getHabitProgress(habit.id, todayDateStr);
   const progress = Math.min((current / habit.goal) * 100, 100);
-  const heatmapData = generateHeatmapData();
+  const heatmapData = generateHeatmapData(logs, habit.id, habit.goal);
   
   const addProgress = (amount: number) => {
-    setCurrent(Math.min(current + amount, habit.goal));
+    logProgress(habit.id, todayDateStr, Math.min(current + amount, habit.goal));
   };
   
   return (

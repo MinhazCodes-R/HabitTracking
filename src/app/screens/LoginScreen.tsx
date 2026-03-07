@@ -1,15 +1,17 @@
 import { Link, useNavigate } from 'react-router';
 import { Target } from 'lucide-react';
 import { useState } from 'react';
+import { useHabits } from '../context/HabitContext';
 
 export function LoginScreen() {
   const navigate = useNavigate();
+  const { login } = useHabits();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    // Mock login - go to home
+    login(email || 'demo@example.com', email ? email.split('@')[0] : 'Demo User');
     navigate('/home');
   };
   

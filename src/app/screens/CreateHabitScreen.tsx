@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { X } from 'lucide-react';
+import { useHabits } from '../context/HabitContext';
 
 const categories = [
   'Health',
@@ -21,6 +22,7 @@ const units = ['ml', 'oz', 'minutes', 'hours', 'pages', 'reps', 'sessions'];
 
 export function CreateHabitScreen() {
   const navigate = useNavigate();
+  const { addHabit } = useHabits();
   const [habitName, setHabitName] = useState('');
   const [category, setCategory] = useState('Health');
   const [frequency, setFrequency] = useState('Daily');
@@ -30,7 +32,17 @@ export function CreateHabitScreen() {
   
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    // Mock save - go back to home
+    if (!habitName || !goal) return;
+    
+    addHabit({
+      name: habitName,
+      category: category.toLowerCase(),
+      frequency,
+      metricType,
+      unit: metricType === 'Quantity' ? unit : '',
+      goal: Number(goal),
+    });
+    
     navigate('/home');
   };
   

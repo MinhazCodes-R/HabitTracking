@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { BottomNav } from '../components/BottomNav';
+import { useHabits } from '../context/HabitContext';
 
 // Generate calendar data
 const generateCalendarData = () => {
@@ -27,18 +28,30 @@ const monthNames = [
 
 const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-// Mock completion data
-const getCompletionLevel = (day: number) => {
-  const random = Math.random();
-  if (random > 0.8) return 'bg-white';
-  if (random > 0.5) return 'bg-muted-foreground';
-  if (random > 0.3) return 'bg-muted';
-  return 'bg-secondary';
-};
-
 export function CalendarScreen() {
   const [selectedDate, setSelectedDate] = useState<number | null>(null);
   const calendarData = generateCalendarData();
+  const { habits, getHabitProgress } = useHabits();
+  
+  const getActualCompletionLevel = (year: number, month: number, day: number) => {
+    if (habits.length === 0) return 'bg-secondary';
+    
+    // Use midday to avoid timezone offset issues when extracting the iso string date
+    const dateStr = new Date(year, month, day, 12).toISOString().split('T')[0];
+    let totalProgress = 0;
+    
+    habits.forEach(habit => {
+      const progress = getHabitProgress(habit.id, dateStr);
+      totalProgress += Math.min((progress / habit.goal) || 0, 1);
+    });
+    
+    const average = totalProgress / habits.length;
+
+    if (average > 0.8) return 'bg-white';
+    if (average > 0.5) return 'bg-muted-foreground';
+    if (average > 0.1) return 'bg-muted';
+    return 'bg-secondary';
+  };
   
   const days = Array.from({ length: calendarData.daysInMonth }, (_, i) => i + 1);
   const emptyDays = Array.from({ length: calendarData.startingDayOfWeek }, (_, i) => i);
@@ -88,7 +101,7 @@ export function CalendarScreen() {
                       ? 'bg-white text-black'
                       : isToday
                       ? 'bg-muted text-white border-2 border-white'
-                      : getCompletionLevel(day) + ' text-white'
+                      : getActualCompletionLevel(calendarData.year, calendarData.month, day) + ' text-white'
                   }`}
                 >
                   {day}
@@ -127,18 +140,20 @@ export function CalendarScreen() {
             </h3>
             
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Drink Water</span>
-                <span className="text-white">2000 / 2000 ml</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Study</span>
-                <span className="text-white">60 / 60 min</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Workout</span>
-                <span className="text-white">3 / 3 sessions</span>
-              </div>
+              {habits.length === 0 ? (
+                <div className="text-muted-foreground">No habits tracked yet.</div>
+              ) : (
+                habits.map((habit) => {
+                  const dateStr = new Date(calendarData.year, calendarData.month, selectedDate, 12).toISOString().split('T')[0];
+                  const current = getHabitProgress(habit.id, dateStr);
+                  return (
+                    <div key={habit.id} className="flex items-center justify-between">
+                      <span className="text-muted-foreground">{habit.name}</span>
+                      <span className="text-white">{current} / {habit.goal} {habit.unit}</span>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         )}

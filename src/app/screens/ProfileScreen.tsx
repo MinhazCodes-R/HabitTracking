@@ -2,13 +2,16 @@ import { useNavigate } from 'react-router';
 import { BottomNav } from '../components/BottomNav';
 import { User, Bell, Moon, RefreshCw, LogOut, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
+import { useHabits } from '../context/HabitContext';
 
 export function ProfileScreen() {
   const navigate = useNavigate();
+  const { user, logout } = useHabits();
   const [darkMode, setDarkMode] = useState(true);
   const [notifications, setNotifications] = useState(true);
   
   const handleLogout = () => {
+    logout();
     navigate('/');
   };
   
@@ -28,8 +31,8 @@ export function ProfileScreen() {
               <User className="w-8 h-8 text-black" />
             </div>
             <div>
-              <h2 className="text-white font-medium text-xl">John Doe</h2>
-              <p className="text-muted-foreground">john.doe@example.com</p>
+              <h2 className="text-white font-medium text-xl">{user?.name || 'Guest User'}</h2>
+              <p className="text-muted-foreground">{user?.email || 'Not logged in'}</p>
             </div>
           </div>
         </div>
