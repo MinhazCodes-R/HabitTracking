@@ -27,12 +27,35 @@ export function ProfileScreen() {
       <div className="px-6 mb-6">
         <div className="bg-card rounded-2xl p-6 border border-border">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center">
-              <User className="w-8 h-8 text-black" />
+            <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center overflow-hidden flex-shrink-0">
+              {user?.avatar ? (
+                <img
+                  src={user.avatar}
+                  alt={user.name}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              ) : (
+                <User className="w-8 h-8 text-black" />
+              )}
             </div>
             <div>
               <h2 className="text-white font-medium text-xl">{user?.name || 'Guest User'}</h2>
               <p className="text-muted-foreground">{user?.email || 'Not logged in'}</p>
+              {user?.provider && (
+                <span style={{
+                  display: 'inline-block',
+                  marginTop: '4px',
+                  padding: '2px 8px',
+                  borderRadius: '999px',
+                  fontSize: '0.7rem',
+                  fontWeight: 600,
+                  background: user.provider === 'google' ? 'rgba(66,133,244,0.2)' : 'rgba(255,255,255,0.1)',
+                  color: user.provider === 'google' ? '#4285F4' : '#a3a3a3',
+                  border: `1px solid ${user.provider === 'google' ? 'rgba(66,133,244,0.4)' : 'var(--border)'}`,
+                }}>
+                  {user.provider === 'google' ? '🔵 Google' : '✉️ Email'}
+                </span>
+              )}
             </div>
           </div>
         </div>

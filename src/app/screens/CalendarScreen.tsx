@@ -1,164 +1,333 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { BottomNav } from '../components/BottomNav';
+import { MonthCalendar } from '../components/MonthCalendar';
 import { useHabits } from '../context/HabitContext';
+import {
+  Droplet, BookOpen, Dumbbell, Target, Brain,
+  DollarSign, Heart, Circle, LayoutGrid,
+} from 'lucide-react';
 
-// Generate calendar data
-const generateCalendarData = () => {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = today.getMonth();
-  
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
-  const daysInMonth = lastDay.getDate();
-  const startingDayOfWeek = firstDay.getDay();
-  
-  return {
-    year,
-    month,
-    daysInMonth,
-    startingDayOfWeek,
-  };
-};
+// ─── Genre definitions ──────────────────────────────────────────────────────
 
-const monthNames = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
+interface Genre {
+  id: string;
+  label: string;
+  icon: React.ElementType;
+  color: string;
+}
+
+const GENRES: Genre[] = [
+  { id: 'all',          label: 'All',          icon: LayoutGrid,  color: '#6366f1' },
+  { id: 'health',       label: 'Health',       icon: Droplet,     color: '#22c55e' },
+  { id: 'fitness',      label: 'Fitness',      icon: Dumbbell,    color: '#f97316' },
+  { id: 'study',        label: 'Study',        icon: BookOpen,    color: '#3b82f6' },
+  { id: 'productivity', label: 'Productivity', icon: Target,      color: '#a855f7' },
+  { id: 'mindfulness',  label: 'Mindfulness',  icon: Brain,       color: '#ec4899' },
+  { id: 'finance',      label: 'Finance',      icon: DollarSign,  color: '#eab308' },
+  { id: 'personal',     label: 'Personal',     icon: Heart,       color: '#ef4444' },
+  { id: 'custom',       label: 'Custom',       icon: Circle,      color: '#64748b' },
 ];
 
-const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+// ─── Build months array ─────────────────────────────────────────────────────
+
+function buildMonthsRange(pastMonths: number, futureMonths: number) {
+  const today = new Date();
+  const months: Array<{ year: number; month: number; id: string }> = [];
+  for (let i = -pastMonths; i <= futureMonths; i++) {
+    const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+    months.push({
+      year: d.getFullYear(),
+      month: d.getMonth(),
+      id: `${d.getFullYear()}-${d.getMonth()}`,
+    });
+  }
+  return months;
+}
+
+const MONTHS = buildMonthsRange(12, 12);
+
+const todayObj = new Date();
+const TODAY_STR = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, '0')}-${String(todayObj.getDate()).padStart(2, '0')}`;
+const CURRENT_MONTH_ID = `${todayObj.getFullYear()}-${todayObj.getMonth()}`;
+
+// ─── Pill chip ────────────────────────────────────────────────────────────
+
+function Chip({
+  label,
+  icon: Icon,
+  active,
+  accentColor,
+  onClick,
+}: {
+  label: string;
+  icon?: React.ElementType;
+  active: boolean;
+  accentColor?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '6px 14px',
+        borderRadius: '999px',
+        border: `1.5px solid ${active ? (accentColor ?? '#fff') : 'var(--border)'}`,
+        background: active ? (accentColor ? `${accentColor}22` : 'var(--secondary)') : 'transparent',
+        color: active ? (accentColor ?? '#fff') : 'var(--muted-foreground)',
+        fontSize: '0.8rem',
+        fontWeight: active ? 600 : 400,
+        cursor: 'pointer',
+        whiteSpace: 'nowrap',
+        transition: 'all 0.15s ease',
+        outline: 'none',
+        flexShrink: 0,
+      }}
+    >
+      {Icon && <Icon size={13} />}
+      {label}
+    </button>
+  );
+}
+
+// ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export function CalendarScreen() {
-  const [selectedDate, setSelectedDate] = useState<number | null>(null);
-  const calendarData = generateCalendarData();
-  const { habits, getHabitProgress } = useHabits();
-  
-  const getActualCompletionLevel = (year: number, month: number, day: number) => {
-    if (habits.length === 0) return 'bg-secondary';
-    
-    // Use midday to avoid timezone offset issues when extracting the iso string date
-    const dateStr = new Date(year, month, day, 12).toISOString().split('T')[0];
-    let totalProgress = 0;
-    
-    habits.forEach(habit => {
-      const progress = getHabitProgress(habit.id, dateStr);
-      totalProgress += Math.min((progress / habit.goal) || 0, 1);
-    });
-    
-    const average = totalProgress / habits.length;
+  const { habits, logs, getProgressForMonth } = useHabits();
 
-    if (average > 0.8) return 'bg-white';
-    if (average > 0.5) return 'bg-muted-foreground';
-    if (average > 0.1) return 'bg-muted';
-    return 'bg-secondary';
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedHabitId, setSelectedHabitId] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(TODAY_STR);
+
+  // Ref map: month id → DOM element for scroll-to
+  const monthRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to current month when calendar mounts
+  useEffect(() => {
+    const el = monthRefs.current[CURRENT_MONTH_ID];
+    if (el && scrollRef.current) {
+      el.scrollIntoView({ behavior: 'auto', block: 'start' });
+    }
+  }, []);
+
+  // Filtered habit list by genre
+  const filteredHabits = useMemo(() => {
+    if (selectedCategory === 'all') return habits;
+    return habits.filter((h) => h.category === selectedCategory);
+  }, [habits, selectedCategory]);
+
+  // Filtered by individual habit selection
+  const activeHabits = useMemo(() => {
+    if (!selectedHabitId) return filteredHabits;
+    return filteredHabits.filter((h) => h.id === selectedHabitId);
+  }, [filteredHabits, selectedHabitId]);
+
+  // When category changes, clear habit selection
+  const handleCategorySelect = useCallback((cat: string) => {
+    setSelectedCategory(cat);
+    setSelectedHabitId(null);
+  }, []);
+
+  // Per-month cache of logs for active habits
+  const getMonthLogs = useCallback(
+    (year: number, month: number) =>
+      getProgressForMonth(activeHabits.map((h) => h.id), year, month),
+    [activeHabits, logs] // re-derive when habits selection or logs change
+  );
+
+  // Genre colour lookup
+  const genreColor = useMemo(() => {
+    const g = GENRES.find((g) => g.id === selectedCategory);
+    return g?.color ?? '#6366f1';
+  }, [selectedCategory]);
+
+  // Detail panel for the selected date
+  const selectedDetailHabits = useMemo(() => {
+    if (!selectedDate) return [];
+    return activeHabits.map((habit) => {
+      const progress = logs[selectedDate]?.[habit.id] ?? 0;
+      const ratio = habit.goal > 0 ? Math.min(progress / habit.goal, 1) : 0;
+      return { habit, progress, ratio };
+    });
+  }, [selectedDate, activeHabits, logs]);
+
+  const formatSelectedDate = (dateStr: string) => {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('en-US', {
+      weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+    });
   };
-  
-  const days = Array.from({ length: calendarData.daysInMonth }, (_, i) => i + 1);
-  const emptyDays = Array.from({ length: calendarData.startingDayOfWeek }, (_, i) => i);
-  
+
   return (
-    <div className="min-h-screen bg-background pb-24 max-w-md mx-auto">
-      {/* Header */}
-      <div className="px-6 pt-12 pb-6">
-        <h1 className="text-3xl font-medium text-white mb-1">Calendar</h1>
-        <p className="text-muted-foreground">
-          {monthNames[calendarData.month]} {calendarData.year}
-        </p>
-      </div>
-      
-      {/* Calendar */}
-      <div className="px-6">
-        <div className="bg-card rounded-2xl p-6 border border-border">
-          {/* Day names */}
-          <div className="grid grid-cols-7 gap-2 mb-4">
-            {dayNames.map((day) => (
-              <div key={day} className="text-center text-xs text-muted-foreground font-medium">
-                {day}
-              </div>
-            ))}
-          </div>
-          
-          {/* Calendar grid */}
-          <div className="grid grid-cols-7 gap-2">
-            {/* Empty days */}
-            {emptyDays.map((i) => (
-              <div key={`empty-${i}`} className="aspect-square" />
-            ))}
-            
-            {/* Days */}
-            {days.map((day) => {
-              const isToday = day === new Date().getDate() && 
-                             calendarData.month === new Date().getMonth() &&
-                             calendarData.year === new Date().getFullYear();
-              const isSelected = day === selectedDate;
-              
-              return (
-                <button
-                  key={day}
-                  onClick={() => setSelectedDate(day)}
-                  className={`aspect-square rounded-lg flex items-center justify-center text-sm font-medium transition-colors ${
-                    isSelected
-                      ? 'bg-white text-black'
-                      : isToday
-                      ? 'bg-muted text-white border-2 border-white'
-                      : getActualCompletionLevel(calendarData.year, calendarData.month, day) + ' text-white'
-                  }`}
-                >
-                  {day}
-                </button>
-              );
-            })}
-          </div>
-          
-          {/* Legend */}
-          <div className="flex items-center gap-2 mt-6 pt-6 border-t border-border text-xs text-muted-foreground">
-            <span>Completion:</span>
-            <div className="flex items-center gap-1">
-              <div className="w-4 h-4 rounded bg-secondary" />
-              <span>None</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-4 h-4 rounded bg-muted" />
-              <span>Low</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-4 h-4 rounded bg-muted-foreground" />
-              <span>Medium</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-4 h-4 rounded bg-white" />
-              <span>High</span>
-            </div>
-          </div>
+    <div style={{ minHeight: '100vh', background: 'var(--background)', maxWidth: '480px', margin: '0 auto', paddingBottom: '96px' }}>
+
+      {/* ── Sticky Header + Filters ── */}
+      <div style={{
+        position: 'sticky',
+        top: 0,
+        zIndex: 10,
+        background: 'var(--background)',
+        borderBottom: '1px solid var(--border)',
+        paddingTop: '48px',
+        paddingBottom: '12px',
+      }}>
+        <div style={{ padding: '0 24px 12px' }}>
+          <h1 style={{ fontSize: '1.8rem', fontWeight: 600, color: '#fff', margin: 0, letterSpacing: '-0.02em' }}>
+            Calendar
+          </h1>
+          <p style={{ color: 'var(--muted-foreground)', fontSize: '0.85rem', margin: '2px 0 0' }}>
+            {todayObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+          </p>
         </div>
-        
-        {/* Selected Date Info */}
-        {selectedDate && (
-          <div className="mt-4 bg-card rounded-2xl p-6 border border-border">
-            <h3 className="text-white font-medium mb-4">
-              {monthNames[calendarData.month]} {selectedDate}, {calendarData.year}
-            </h3>
-            
-            <div className="space-y-3">
-              {habits.length === 0 ? (
-                <div className="text-muted-foreground">No habits tracked yet.</div>
-              ) : (
-                habits.map((habit) => {
-                  const dateStr = new Date(calendarData.year, calendarData.month, selectedDate, 12).toISOString().split('T')[0];
-                  const current = getHabitProgress(habit.id, dateStr);
-                  return (
-                    <div key={habit.id} className="flex items-center justify-between">
-                      <span className="text-muted-foreground">{habit.name}</span>
-                      <span className="text-white">{current} / {habit.goal} {habit.unit}</span>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+
+        {/* Genre chips */}
+        <div style={{
+          display: 'flex',
+          gap: '8px',
+          overflowX: 'auto',
+          padding: '0 24px 8px',
+          scrollbarWidth: 'none',
+        }}>
+          {GENRES.map((g) => (
+            <Chip
+              key={g.id}
+              label={g.label}
+              icon={g.icon}
+              active={selectedCategory === g.id}
+              accentColor={g.color}
+              onClick={() => handleCategorySelect(g.id)}
+            />
+          ))}
+        </div>
+
+        {/* Habit chips — only show when there are habits in the selected genre */}
+        {filteredHabits.length > 0 && (
+          <div style={{
+            display: 'flex',
+            gap: '8px',
+            overflowX: 'auto',
+            padding: '0 24px 4px',
+            scrollbarWidth: 'none',
+          }}>
+            <Chip
+              label="All Habits"
+              active={selectedHabitId === null}
+              accentColor={genreColor}
+              onClick={() => setSelectedHabitId(null)}
+            />
+            {filteredHabits.map((h) => (
+              <Chip
+                key={h.id}
+                label={h.name}
+                active={selectedHabitId === h.id}
+                accentColor={genreColor}
+                onClick={() => setSelectedHabitId(h.id)}
+              />
+            ))}
           </div>
         )}
+
+        {/* Legend */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          padding: '8px 24px 0',
+          flexWrap: 'wrap',
+        }}>
+          {[
+            { color: 'rgba(99,102,241,0.35)', label: 'Low' },
+            { color: 'rgba(234,179,8,0.45)',  label: 'Mid' },
+            { color: 'rgba(34,197,94,0.55)',  label: 'High' },
+            { color: 'rgba(255,255,255,0.95)', label: '100%', textColor: '#000' },
+          ].map(({ color, label, textColor }) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <div style={{
+                width: '12px', height: '12px', borderRadius: '3px',
+                background: color, border: '1px solid rgba(255,255,255,0.15)',
+              }} />
+              <span style={{ fontSize: '0.7rem', color: 'var(--muted-foreground)' }}>{label}</span>
+            </div>
+          ))}
+        </div>
       </div>
-      
+
+      {/* ── Scrollable months ── */}
+      <div
+        ref={scrollRef}
+        style={{ padding: '16px 24px 0', overflowY: 'auto' }}
+      >
+        {MONTHS.map(({ year, month, id }) => (
+          <div
+            key={id}
+            ref={(el) => { monthRefs.current[id] = el; }}
+          >
+            <MonthCalendar
+              year={year}
+              month={month}
+              habits={activeHabits}
+              monthLogs={getMonthLogs(year, month)}
+              selectedDate={selectedDate}
+              onSelectDate={setSelectedDate}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* ── Selected Day Detail ── */}
+      {selectedDate && (
+        <div style={{
+          margin: '0 24px 24px',
+          background: 'var(--card)',
+          border: '1px solid var(--border)',
+          borderRadius: '16px',
+          padding: '20px',
+        }}>
+          <h3 style={{ color: '#fff', fontWeight: 600, fontSize: '0.95rem', margin: '0 0 16px' }}>
+            {formatSelectedDate(selectedDate)}
+          </h3>
+
+          {activeHabits.length === 0 ? (
+            <p style={{ color: 'var(--muted-foreground)', fontSize: '0.875rem' }}>
+              {habits.length === 0
+                ? 'No habits yet — create one from the Home screen.'
+                : 'No habits in this category.'}
+            </p>
+          ) : selectedDetailHabits.every((d) => d.progress === 0) ? (
+            <p style={{ color: 'var(--muted-foreground)', fontSize: '0.875rem' }}>
+              No progress logged for this day.
+            </p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {selectedDetailHabits.map(({ habit, progress, ratio }) => (
+                <div key={habit.id}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ color: '#fff', fontSize: '0.875rem', fontWeight: 500 }}>
+                      {habit.name}
+                    </span>
+                    <span style={{ color: 'var(--muted-foreground)', fontSize: '0.8rem' }}>
+                      {progress} / {habit.goal} {habit.unit}
+                    </span>
+                  </div>
+                  <div style={{ width: '100%', height: '6px', background: 'var(--secondary)', borderRadius: '999px', overflow: 'hidden' }}>
+                    <div style={{
+                      height: '100%',
+                      borderRadius: '999px',
+                      width: `${Math.round(ratio * 100)}%`,
+                      background: ratio >= 1 ? '#22c55e' : ratio >= 0.5 ? '#eab308' : '#6366f1',
+                      transition: 'width 0.3s ease',
+                    }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <BottomNav />
     </div>
   );
