@@ -10,6 +10,10 @@ create table habits (
   unit text not null default 'ml',
   goal numeric not null default 1,
   frequency text not null default 'daily',
+  increments numeric[] not null default '{10,25,50}',
+  icon text not null default 'circle',
+  color text not null default '#ffffff',
+  position integer not null default 0,
   created_at timestamptz default now()
 );
 

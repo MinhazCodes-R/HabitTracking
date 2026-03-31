@@ -10,6 +10,10 @@ export interface Habit {
   unit: string;
   goal: number;
   frequency: string;
+  increments: number[];
+  icon: string;
+  color: string;
+  position: number;
 }
 
 export interface HabitWithProgress extends Habit {
@@ -25,12 +29,12 @@ export function useHabits() {
 
   const fetchHabits = useCallback(async () => {
     if (!user) return;
-    setLoading(true);
 
     const { data: habitsData } = await supabase
       .from('habits')
       .select('*')
-      .eq('user_id', user.id);
+      .eq('user_id', user.id)
+      .order('position', { ascending: true });
 
     if (!habitsData) { setLoading(false); return; }
 
@@ -44,6 +48,10 @@ export function useHabits() {
 
     setHabits(habitsData.map(h => ({
       ...h,
+      increments: h.increments ?? [10, 25, 50],
+      icon: h.icon ?? 'circle',
+      color: h.color ?? '#ffffff',
+      position: h.position ?? 0,
       current: logMap.get(h.id) ?? 0,
     })));
     setLoading(false);
@@ -57,13 +65,25 @@ export function useHabits() {
     await fetchHabits();
   };
 
+  const updateHabit = async (habitId: string, updates: Partial<Omit<Habit, 'id'>>) => {
+    setHabits(prev => prev.map(h => h.id === habitId ? { ...h, ...updates } : h));
+    supabase.from('habits').update(updates).eq('id', habitId).then();
+  };
+
+  const reorderHabits = (reordered: HabitWithProgress[]) => {
+    setHabits(reordered);
+    reordered.forEach((h, i) => {
+      supabase.from('habits').update({ position: i }).eq('id', h.id).then();
+    });
+  };
+
   const logProgress = async (habitId: string, value: number) => {
     if (!user) return;
-    await supabase.from('habit_logs').upsert(
+    setHabits(prev => prev.map(h => h.id === habitId ? { ...h, current: value } : h));
+    supabase.from('habit_logs').upsert(
       { habit_id: habitId, user_id: user.id, date: today, value },
       { onConflict: 'habit_id,date' }
-    );
-    await fetchHabits();
+    ).then();
   };
 
   const getHabitLogs = async (habitId: string, days: number = 84) => {
@@ -83,15 +103,10 @@ export function useHabits() {
     return map;
   };
 
-  const updateHabit = async (habitId: string, updates: Partial<Omit<Habit, 'id'>>) => {
-    await supabase.from('habits').update(updates).eq('id', habitId);
-    await fetchHabits();
-  };
-
   const deleteHabit = async (habitId: string) => {
-    await supabase.from('habits').delete().eq('id', habitId);
-    await fetchHabits();
+    setHabits(prev => prev.filter(h => h.id !== habitId));
+    supabase.from('habits').delete().eq('id', habitId).then();
   };
 
-  return { habits, loading, createHabit, updateHabit, logProgress, getHabitLogs, deleteHabit, refetch: fetchHabits };
+  return { habits, setHabits, loading, createHabit, updateHabit, reorderHabits, logProgress, getHabitLogs, deleteHabit, refetch: fetchHabits };
 }
