@@ -1,18 +1,34 @@
 import { useNavigate } from 'react-router';
 import { BottomNav } from '../components/BottomNav';
-import { User, Bell, Moon, LogOut, ChevronRight } from 'lucide-react';
+import { User, Bell, Moon, LogOut, ChevronRight, MessageSquare, Bug, Lightbulb, Github, Linkedin, Globe } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../AuthContext';
+import { supabase } from '@/lib/supabase';
 
 export function ProfileScreen() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [darkMode, setDarkMode] = useState(true);
   const [notifications, setNotifications] = useState(true);
+  const [feedbackType, setFeedbackType] = useState<'bug' | 'feedback' | null>(null);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [feedbackSent, setFeedbackSent] = useState(false);
 
   const handleLogout = async () => {
     await logout();
     navigate('/');
+  };
+
+  const handleSubmitFeedback = async () => {
+    if (!user || !feedbackText.trim()) return;
+    await supabase.from('feedback').insert({
+      user_id: user.id,
+      type: feedbackType,
+      message: feedbackText.trim(),
+    });
+    setFeedbackSent(true);
+    setFeedbackText('');
+    setTimeout(() => { setFeedbackSent(false); setFeedbackType(null); }, 2000);
   };
 
   const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
@@ -79,10 +95,75 @@ export function ProfileScreen() {
             <ChevronRight className="w-5 h-5 text-muted-foreground" />
           </button>
         </div>
+
+        {/* Early Access Banner & Feedback */}
+        <div className="bg-card rounded-2xl p-6 border border-border mt-6">
+          <div className="text-center mb-4">
+            <span className="inline-block px-3 py-1 bg-secondary rounded-full text-xs text-muted-foreground font-medium mb-3">EARLY ACCESS</span>
+            <p className="text-white font-medium">Thanks for being an early user!</p>
+            <p className="text-muted-foreground text-sm mt-1">
+              This app is in its very early releases. Things may break, features may change. Your patience and feedback mean the world — thank you for helping shape this product.
+            </p>
+          </div>
+
+          <div className="flex gap-2 mb-4">
+            <button onClick={() => { setFeedbackType('bug'); setFeedbackSent(false); }}
+              className={`flex-1 py-3 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
+                feedbackType === 'bug' ? 'bg-white text-black' : 'bg-secondary text-white hover:bg-accent'
+              }`}>
+              <Bug className="w-4 h-4" /> Report Bug
+            </button>
+            <button onClick={() => { setFeedbackType('feedback'); setFeedbackSent(false); }}
+              className={`flex-1 py-3 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
+                feedbackType === 'feedback' ? 'bg-white text-black' : 'bg-secondary text-white hover:bg-accent'
+              }`}>
+              <Lightbulb className="w-4 h-4" /> Feedback
+            </button>
+          </div>
+
+          {feedbackType && !feedbackSent && (
+            <div className="space-y-3">
+              <textarea
+                value={feedbackText}
+                onChange={(e) => setFeedbackText(e.target.value)}
+                placeholder={feedbackType === 'bug' ? 'Describe the bug...' : 'Share your ideas or feedback...'}
+                rows={3}
+                className="w-full px-4 py-3 bg-input rounded-xl text-white placeholder:text-muted-foreground border border-border focus:outline-none focus:border-white transition-colors resize-none"
+              />
+              <button onClick={handleSubmitFeedback} disabled={!feedbackText.trim()}
+                className="w-full py-3 bg-white text-black rounded-xl font-medium hover:bg-gray-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                Submit
+              </button>
+            </div>
+          )}
+
+          {feedbackSent && (
+            <p className="text-green-400 text-sm text-center py-2">Thanks for your feedback! 🙏</p>
+          )}
+
+          {/* Developer Info */}
+          <div className="border-t border-border mt-4 pt-4">
+            <p className="text-muted-foreground text-sm text-center mb-3">Built by <span className="text-white">Minha$Codes</span></p>
+            <div className="flex items-center justify-center gap-4">
+              <a href="https://github.com/MinhazCodes-R" target="_blank" rel="noopener noreferrer"
+                className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center hover:bg-accent transition-colors">
+                <Github className="w-5 h-5 text-white" />
+              </a>
+              <a href="https://www.linkedin.com/in/minhazur-rakin/" target="_blank" rel="noopener noreferrer"
+                className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center hover:bg-accent transition-colors">
+                <Linkedin className="w-5 h-5 text-white" />
+              </a>
+              <a href="https://www.minhazcodes.com/" target="_blank" rel="noopener noreferrer"
+                className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center hover:bg-accent transition-colors">
+                <Globe className="w-5 h-5 text-white" />
+              </a>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="px-6 mt-8 text-center">
-        <p className="text-muted-foreground text-sm">Version 1.0.0</p>
+        <p className="text-muted-foreground text-sm">Version 0.1.0</p>
       </div>
 
       <BottomNav />
