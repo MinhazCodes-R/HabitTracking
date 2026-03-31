@@ -83,10 +83,15 @@ export function useHabits() {
     return map;
   };
 
+  const updateHabit = async (habitId: string, updates: Partial<Omit<Habit, 'id'>>) => {
+    await supabase.from('habits').update(updates).eq('id', habitId);
+    await fetchHabits();
+  };
+
   const deleteHabit = async (habitId: string) => {
     await supabase.from('habits').delete().eq('id', habitId);
     await fetchHabits();
   };
 
-  return { habits, loading, createHabit, logProgress, getHabitLogs, deleteHabit, refetch: fetchHabits };
+  return { habits, loading, createHabit, updateHabit, logProgress, getHabitLogs, deleteHabit, refetch: fetchHabits };
 }

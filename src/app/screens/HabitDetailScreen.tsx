@@ -4,10 +4,12 @@ import { CalendarHeatmap } from '../components/CalendarHeatmap';
 import { useState, useEffect } from 'react';
 import { useHabits, type HabitWithProgress } from '@/hooks/useHabits';
 
+const categories = ['health', 'fitness', 'study', 'productivity', 'mindfulness', 'finance', 'personal', 'custom'];
+
 export function HabitDetailScreen() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { habits, loading, logProgress, getHabitLogs } = useHabits();
+  const { habits, loading, logProgress, getHabitLogs, updateHabit } = useHabits();
   const [heatmapData, setHeatmapData] = useState<Record<string, number>>({});
 
   const habit = habits.find(h => h.id === id);
@@ -57,7 +59,15 @@ export function HabitDetailScreen() {
           </div>
           <div>
             <h1 className="text-2xl font-medium text-white">{habit.name}</h1>
-            <p className="text-muted-foreground capitalize">{habit.category}</p>
+            <select
+              value={habit.category}
+              onChange={(e) => updateHabit(habit.id, { category: e.target.value })}
+              className="bg-transparent text-muted-foreground capitalize text-sm focus:outline-none cursor-pointer"
+            >
+              {categories.map(cat => (
+                <option key={cat} value={cat} className="bg-card capitalize">{cat}</option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
