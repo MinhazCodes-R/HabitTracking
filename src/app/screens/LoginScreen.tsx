@@ -1,5 +1,4 @@
 import { Link, useNavigate } from 'react-router';
-import { Target } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../AuthContext';
 
@@ -21,11 +20,8 @@ export function LoginScreen() {
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 max-w-md mx-auto w-full">
       <div className="w-full space-y-8">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center">
-            <Target className="w-8 h-8 text-black" />
-          </div>
           <div className="text-center">
-            <h1 className="text-3xl font-medium text-white">Habit</h1>
+            <h1 className="text-3xl font-medium text-white">MiniHabits</h1>
             <p className="text-muted-foreground mt-1">Build better habits, one day at a time</p>
           </div>
         </div>
