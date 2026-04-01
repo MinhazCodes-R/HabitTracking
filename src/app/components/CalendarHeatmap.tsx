@@ -1,3 +1,5 @@
+import { toLocalDateStr } from '@/lib/date';
+
 interface CalendarHeatmapProps {
   data: Record<string, number>; // date string -> completion value (0-1)
 }
@@ -21,7 +23,7 @@ export function CalendarHeatmap({ data }: CalendarHeatmapProps) {
   }
   
   const getCompletionLevel = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = toLocalDateStr(date);
     const value = data[dateStr] || 0;
     
     if (value === 0) return 'bg-secondary';

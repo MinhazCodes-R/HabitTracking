@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/app/AuthContext';
+import { toLocalDateStr } from '@/lib/date';
 
 export interface Habit {
   id: string;
@@ -14,6 +15,7 @@ export interface Habit {
   icon: string;
   color: string;
   position: number;
+  archived: boolean;
 }
 
 export interface HabitWithProgress extends Habit {
@@ -21,19 +23,24 @@ export interface HabitWithProgress extends Habit {
 }
 
 export function useHabits() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [habits, setHabits] = useState<HabitWithProgress[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = toLocalDateStr(new Date());
 
   const fetchHabits = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      setHabits([]);
+      setLoading(false);
+      return;
+    }
 
     const { data: habitsData } = await supabase
       .from('habits')
       .select('*')
       .eq('user_id', user.id)
+      .eq('archived', false)
       .order('position', { ascending: true });
 
     if (!habitsData) { setLoading(false); return; }
@@ -52,16 +59,21 @@ export function useHabits() {
       icon: h.icon ?? 'circle',
       color: h.color ?? '#ffffff',
       position: h.position ?? 0,
+      archived: h.archived ?? false,
       current: logMap.get(h.id) ?? 0,
     })));
     setLoading(false);
-  }, [user, today]);
+  }, [user?.id, today]);
 
-  useEffect(() => { fetchHabits(); }, [fetchHabits]);
+  // Re-fetch when user changes or auth finishes loading
+  useEffect(() => {
+    if (authLoading) return;
+    fetchHabits();
+  }, [authLoading, fetchHabits]);
 
-  const createHabit = async (habit: Omit<Habit, 'id'>) => {
+  const createHabit = async (habit: Omit<Habit, 'id' | 'archived'>) => {
     if (!user) return;
-    await supabase.from('habits').insert({ ...habit, user_id: user.id });
+    await supabase.from('habits').insert({ ...habit, user_id: user.id, archived: false });
     await fetchHabits();
   };
 
@@ -96,17 +108,17 @@ export function useHabits() {
       .select('date, value')
       .eq('habit_id', habitId)
       .eq('user_id', user.id)
-      .gte('date', from.toISOString().split('T')[0]);
+      .gte('date', toLocalDateStr(from));
 
     const map: Record<string, number> = {};
     (data ?? []).forEach(l => { map[l.date] = l.value; });
     return map;
   };
 
-  const deleteHabit = async (habitId: string) => {
+  const archiveHabit = async (habitId: string) => {
     setHabits(prev => prev.filter(h => h.id !== habitId));
-    supabase.from('habits').delete().eq('id', habitId).then();
+    await supabase.from('habits').update({ archived: true }).eq('id', habitId);
   };
 
-  return { habits, setHabits, loading, createHabit, updateHabit, reorderHabits, logProgress, getHabitLogs, deleteHabit, refetch: fetchHabits };
+  return { habits, setHabits, loading, createHabit, updateHabit, reorderHabits, logProgress, getHabitLogs, archiveHabit, refetch: fetchHabits };
 }

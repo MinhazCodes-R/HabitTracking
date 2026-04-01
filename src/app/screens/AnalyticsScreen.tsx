@@ -4,6 +4,7 @@ import { useHabits } from '@/hooks/useHabits';
 import { useAuth } from '../AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useState, useEffect } from 'react';
+import { toLocalDateStr } from '@/lib/date';
 
 export function AnalyticsScreen() {
   const { user } = useAuth();
@@ -20,8 +21,8 @@ export function AnalyticsScreen() {
 
     supabase.from('habit_logs').select('date, value, habit_id')
       .eq('user_id', user.id)
-      .gte('date', weekAgo.toISOString().split('T')[0])
-      .lte('date', today.toISOString().split('T')[0])
+      .gte('date', toLocalDateStr(weekAgo))
+      .lte('date', toLocalDateStr(today))
       .then(({ data }) => {
         const habitMap = new Map(habits.map(h => [h.id, h.goal]));
         const dailyScores: Record<string, number[]> = {};
@@ -36,7 +37,7 @@ export function AnalyticsScreen() {
         for (let i = 0; i < 7; i++) {
           const d = new Date(weekAgo);
           d.setDate(d.getDate() + i);
-          const key = d.toISOString().split('T')[0];
+          const key = toLocalDateStr(d);
           const scores = dailyScores[key] ?? [];
           weekly.push(scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0);
         }

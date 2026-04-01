@@ -1,16 +1,17 @@
 import { useParams, useNavigate } from 'react-router';
-import { ArrowLeft, Pencil, Check, X } from 'lucide-react';
+import { ArrowLeft, Pencil, Check, X, Trash2 } from 'lucide-react';
 import { CalendarHeatmap } from '../components/CalendarHeatmap';
 import { useState, useEffect } from 'react';
 import { useHabits } from '@/hooks/useHabits';
 import { iconOptions, colorOptions, getIcon } from '@/lib/habitConfig';
+import { toLocalDateStr } from '@/lib/date';
 
 const categories = ['health', 'fitness', 'study', 'productivity', 'mindfulness', 'finance', 'personal', 'custom'];
 
 export function HabitDetailScreen() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { habits, loading, logProgress, getHabitLogs, updateHabit } = useHabits();
+  const { habits, loading, logProgress, getHabitLogs, updateHabit, archiveHabit } = useHabits();
   const [heatmapData, setHeatmapData] = useState<Record<string, number>>({});
   const [editingIncrements, setEditingIncrements] = useState(false);
   const [incValues, setIncValues] = useState<string[]>(['', '', '']);
@@ -76,7 +77,7 @@ export function HabitDetailScreen() {
   for (let i = 0; i < dates.length; i++) {
     const expected = new Date(today);
     expected.setDate(expected.getDate() - i);
-    if (dates[i] === expected.toISOString().split('T')[0] && heatmapData[dates[i]] > 0) {
+    if (dates[i] === toLocalDateStr(expected) && heatmapData[dates[i]] > 0) {
       currentStreak++;
     } else break;
   }
@@ -247,6 +248,14 @@ export function HabitDetailScreen() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Delete Habit */}
+      <div className="px-6 mt-6">
+        <button onClick={async () => { await archiveHabit(habit.id); navigate('/home'); }}
+          className="w-full py-4 rounded-xl font-medium text-destructive bg-destructive/10 hover:bg-destructive/20 transition-colors flex items-center justify-center gap-2">
+          <Trash2 className="w-4 h-4" /> Delete Habit
+        </button>
       </div>
     </div>
   );
