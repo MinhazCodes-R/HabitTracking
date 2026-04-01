@@ -4,7 +4,7 @@ import { CalendarHeatmap } from '../components/CalendarHeatmap';
 import { useState, useEffect } from 'react';
 import { useHabits } from '@/hooks/useHabits';
 import { iconOptions, colorOptions, getIcon } from '@/lib/habitConfig';
-import { toLocalDateStr } from '@/lib/date';
+import { toLocalDateStr, displayUnit } from '@/lib/date';
 
 const categories = ['health', 'fitness', 'study', 'productivity', 'mindfulness', 'finance', 'personal', 'custom'];
 
@@ -41,6 +41,7 @@ export function HabitDetailScreen() {
   const isBoolean = habit.metric_type === 'boolean';
   const isDone = habit.current >= habit.goal;
   const progress = Math.min((habit.current / habit.goal) * 100, 100);
+  const unitLabel = displayUnit(habit.metric_type, habit.unit);
 
   const normalizedHeatmap: Record<string, number> = {};
   for (const [date, value] of Object.entries(heatmapData)) {
@@ -180,7 +181,7 @@ export function HabitDetailScreen() {
             <>
               <div className="flex items-center justify-between mb-4">
                 <span className="text-muted-foreground">Today's Progress</span>
-                <span className="text-white text-2xl font-medium">{habit.current} / {habit.goal} {habit.unit}</span>
+                <span className="text-white text-2xl font-medium">{habit.current} / {habit.goal}{unitLabel ? ` ${unitLabel}` : ''}</span>
               </div>
               <div className="w-full h-3 bg-secondary rounded-full overflow-hidden mb-6">
                 <div className="h-full rounded-full transition-all duration-300" style={{ width: `${progress}%`, backgroundColor: habit.color }} />
@@ -220,7 +221,7 @@ export function HabitDetailScreen() {
                   {habit.increments.map((amt, i) => (
                     <button key={i} onClick={() => addProgress(amt)}
                       className="py-3 bg-secondary rounded-xl text-white font-medium hover:bg-accent transition-colors">
-                      +{amt} {habit.unit}
+                      +{amt}{unitLabel ? ` ${unitLabel}` : ''}
                     </button>
                   ))}
                 </div>

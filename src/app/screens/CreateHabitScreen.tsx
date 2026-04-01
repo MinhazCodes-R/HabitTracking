@@ -33,7 +33,7 @@ export function CreateHabitScreen() {
       name: habitName,
       category: category.toLowerCase(),
       metric_type: metricType.toLowerCase(),
-      unit: isBoolean ? 'done' : unit,
+      unit: isBoolean ? 'done' : metricType === 'Count' ? 'times' : metricType === 'Duration' ? 'min' : unit,
       goal: isBoolean ? 1 : (Number(goal) || 1),
       frequency: frequency.toLowerCase(),
       increments: isBoolean ? [1] : [Number(inc1) || 10, Number(inc2) || 25, Number(inc3) || 50],

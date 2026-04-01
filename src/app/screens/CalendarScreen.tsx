@@ -4,6 +4,7 @@ import { BottomNav } from '../components/BottomNav';
 import { useHabits } from '@/hooks/useHabits';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '../AuthContext';
+import { displayUnit } from '@/lib/date';
 
 const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -150,7 +151,7 @@ export function CalendarScreen() {
                 filteredHabits.map(h => (
                   <div key={h.id} className="flex items-center justify-between">
                     <span className="text-muted-foreground">{h.name}</span>
-                    <span className="text-white">{selectedLogs[h.id] ?? 0} / {h.goal} {h.unit}</span>
+                    <span className="text-white">{selectedLogs[h.id] ?? 0} / {h.goal}{displayUnit(h.metric_type, h.unit) ? ` ${displayUnit(h.metric_type, h.unit)}` : ''}</span>
                   </div>
                 ))
               )}

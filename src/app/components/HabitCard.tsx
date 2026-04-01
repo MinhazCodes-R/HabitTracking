@@ -1,6 +1,7 @@
 import { Link } from 'react-router';
 import { CheckCircle, Plus } from 'lucide-react';
 import { getIcon } from '@/lib/habitConfig';
+import { displayUnit } from '@/lib/date';
 
 interface HabitCardProps {
   id: string;
@@ -22,6 +23,7 @@ export function HabitCard({ id, name, category, metric_type, current, goal, unit
   const isBoolean = metric_type === 'boolean';
   const isDone = current >= goal;
   const progress = Math.min((current / goal) * 100, 100);
+  const unitLabel = displayUnit(metric_type, unit);
 
   return (
     <div className="bg-card rounded-2xl p-6 border border-border">
@@ -46,7 +48,7 @@ export function HabitCard({ id, name, category, metric_type, current, goal, unit
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Progress</span>
-              <span className="text-white">{current} / {goal} {unit}</span>
+              <span className="text-white">{current} / {goal}{unitLabel ? ` ${unitLabel}` : ''}</span>
             </div>
             <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
               <div className="h-full rounded-full transition-all duration-300" style={{ width: `${progress}%`, backgroundColor: color }} />
@@ -68,7 +70,7 @@ export function HabitCard({ id, name, category, metric_type, current, goal, unit
           <button onClick={(e) => { e.preventDefault(); onIncrement(increments[0] ?? 10); }}
             className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-secondary text-white hover:bg-accent transition-colors flex items-center justify-center gap-2">
             <Plus className="w-4 h-4" />
-            +{increments[0] ?? 10} {unit}
+            +{increments[0] ?? 10}{unitLabel ? ` ${unitLabel}` : ''}
           </button>
         )}
       </div>
