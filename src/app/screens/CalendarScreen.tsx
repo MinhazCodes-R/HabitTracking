@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle, Plus, Minus } from 'lucide-react';
 import { BottomNav } from '../components/BottomNav';
 import { useHabits } from '@/hooks/useHabits';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '../AuthContext';
+import { displayUnit, toLocalDateStr } from '@/lib/date';
 import { displayUnit } from '@/lib/date';
 import { getIcon } from '@/lib/habitConfig';
 
@@ -12,8 +13,9 @@ const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export function CalendarScreen() {
   const { user } = useAuth();
-  const { habits } = useHabits();
+  const { habits, logProgressForDate } = useHabits();
   const today = new Date();
+  const todayStr = toLocalDateStr(today);
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [selectedDate, setSelectedDate] = useState<number | null>(null);
@@ -119,6 +121,22 @@ export function CalendarScreen() {
 
   const selectedDateStr = selectedDate ? `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}` : '';
   const selectedLogs = selectedDateStr ? (dayLogs[selectedDateStr] ?? {}) : {};
+  const isFutureDate = selectedDateStr > todayStr;
+  const canEditSelected = Boolean(selectedDateStr) && !isFutureDate;
+
+  const updateSelectedLog = (habitId: string, value: number) => {
+    if (!canEditSelected) return;
+    const clamped = Math.max(0, value);
+    setDayLogs(prev => {
+      const next = { ...prev };
+      const day = { ...(next[selectedDateStr] ?? {}) };
+      if (clamped === 0) delete day[habitId];
+      else day[habitId] = clamped;
+      next[selectedDateStr] = day;
+      return next;
+    });
+    logProgressForDate(habitId, clamped, selectedDateStr);
+  };
 
   return (
     <div className="min-h-screen bg-background pb-24 max-w-md mx-auto">
@@ -225,17 +243,68 @@ export function CalendarScreen() {
 
         {selectedDate && (
           <div className="mt-4 bg-card rounded-2xl p-6 border border-border">
-            <h3 className="text-white font-medium mb-4">{monthNames[viewMonth]} {selectedDate}, {viewYear}</h3>
-            <div className="space-y-3">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-medium">{monthNames[viewMonth]} {selectedDate}, {viewYear}</h3>
+              {isFutureDate && <span className="text-xs text-muted-foreground">Future date</span>}
+            </div>
+            <div className="space-y-4">
               {filteredHabits.length === 0 ? (
                 <p className="text-muted-foreground">No habits in this category</p>
               ) : (
-                filteredHabits.map(h => (
-                  <div key={h.id} className="flex items-center justify-between">
-                    <span className="text-muted-foreground">{h.name}</span>
-                    <span className="text-white">{selectedLogs[h.id] ?? 0} / {h.goal}{displayUnit(h.metric_type, h.unit) ? ` ${displayUnit(h.metric_type, h.unit)}` : ''}</span>
-                  </div>
-                ))
+                filteredHabits.map(h => {
+                  const current = selectedLogs[h.id] ?? 0;
+                  const isBoolean = h.metric_type === 'boolean';
+                  const isDone = current >= h.goal;
+                  const unitLabel = displayUnit(h.metric_type, h.unit);
+                  const step = h.increments?.[0] ?? 1;
+                  return (
+                    <div key={h.id}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-white">{h.name}</span>
+                        <span className="text-sm text-muted-foreground">
+                          {current} / {h.goal}{unitLabel ? ` ${unitLabel}` : ''}
+                        </span>
+                      </div>
+                      {isBoolean ? (
+                        <button
+                          disabled={!canEditSelected}
+                          onClick={() => updateSelectedLog(h.id, isDone ? 0 : h.goal)}
+                          className={`w-full py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                            isDone ? 'bg-green-400/20 text-green-400' : 'bg-secondary text-white hover:bg-accent'
+                          }`}>
+                          <CheckCircle className="w-4 h-4" />
+                          {isDone ? 'Done' : 'Mark done'}
+                        </button>
+                      ) : (
+                        <div className="flex gap-2">
+                          <button
+                            disabled={!canEditSelected}
+                            onClick={() => updateSelectedLog(h.id, Math.max(current - step, 0))}
+                            className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-secondary text-white hover:bg-accent transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <Minus className="w-4 h-4" />
+                            {step}{unitLabel ? ` ${unitLabel}` : ''}
+                          </button>
+                          <button
+                            disabled={!canEditSelected}
+                            onClick={() => updateSelectedLog(h.id, isDone ? 0 : h.goal)}
+                            className={`flex-1 py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                              isDone ? 'bg-green-400/20 text-green-400' : 'bg-secondary text-white hover:bg-accent'
+                            }`}>
+                            <CheckCircle className="w-4 h-4" />
+                            {isDone ? 'Done' : 'Complete'}
+                          </button>
+                          <button
+                            disabled={!canEditSelected}
+                            onClick={() => updateSelectedLog(h.id, Math.min(current + step, h.goal))}
+                            className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-secondary text-white hover:bg-accent transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <Plus className="w-4 h-4" />
+                            {step}{unitLabel ? ` ${unitLabel}` : ''}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>

@@ -98,6 +98,17 @@ export function useHabits() {
     ).then();
   };
 
+  const logProgressForDate = async (habitId: string, value: number, date: string) => {
+    if (!user) return;
+    if (date === today) {
+      setHabits(prev => prev.map(h => h.id === habitId ? { ...h, current: value } : h));
+    }
+    await supabase.from('habit_logs').upsert(
+      { habit_id: habitId, user_id: user.id, date, value },
+      { onConflict: 'habit_id,date' }
+    );
+  };
+
   const getHabitLogs = async (habitId: string, days: number = 84) => {
     if (!user) return {};
     const from = new Date();
@@ -120,5 +131,5 @@ export function useHabits() {
     await supabase.from('habits').update({ archived: true }).eq('id', habitId);
   };
 
-  return { habits, setHabits, loading, createHabit, updateHabit, reorderHabits, logProgress, getHabitLogs, archiveHabit, refetch: fetchHabits };
+  return { habits, setHabits, loading, createHabit, updateHabit, reorderHabits, logProgress, logProgressForDate, getHabitLogs, archiveHabit, refetch: fetchHabits };
 }
