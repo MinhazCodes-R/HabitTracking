@@ -47,7 +47,14 @@ export function AnalyticsScreen() {
       });
   }, [user, habits]);
 
-  const dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const weekStart = new Date();
+  weekStart.setDate(weekStart.getDate() - 6);
+  const weekdayLetters = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  const dayLabels = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + i);
+    return weekdayLetters[d.getDay()];
+  });
 
   return (
     <div className="min-h-screen bg-background pb-24 max-w-md mx-auto">
