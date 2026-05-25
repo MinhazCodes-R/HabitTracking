@@ -5,6 +5,8 @@ import { useHabits } from '@/hooks/useHabits';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '../AuthContext';
 import { displayUnit, toLocalDateStr } from '@/lib/date';
+import { displayUnit } from '@/lib/date';
+import { getIcon } from '@/lib/habitConfig';
 
 const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -18,6 +20,7 @@ export function CalendarScreen() {
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [selectedDate, setSelectedDate] = useState<number | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedHabitId, setSelectedHabitId] = useState<string | null>(null);
   const [dayLogs, setDayLogs] = useState<Record<string, Record<string, number>>>({});
 
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
@@ -47,6 +50,17 @@ export function CalendarScreen() {
 
   const filteredHabitIds = useMemo(() => new Set(filteredHabits.map(h => h.id)), [filteredHabits]);
 
+  const selectedHabit = useMemo(
+    () => habits.find(h => h.id === selectedHabitId) ?? null,
+    [habits, selectedHabitId]
+  );
+
+  useEffect(() => {
+    if (selectedHabitId && !filteredHabits.some(h => h.id === selectedHabitId)) {
+      setSelectedHabitId(null);
+    }
+  }, [filteredHabits, selectedHabitId]);
+
   useEffect(() => {
     if (!user) return;
     const mm = String(viewMonth + 1).padStart(2, '0');
@@ -68,7 +82,18 @@ export function CalendarScreen() {
   const getCompletionLevel = (day: number) => {
     const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const logs = dayLogs[dateStr];
-    if (!logs || filteredHabits.length === 0) return 'bg-secondary';
+    if (!logs) return 'bg-secondary';
+
+    if (selectedHabit) {
+      const goal = selectedHabit.goal || 1;
+      const ratio = (logs[selectedHabit.id] ?? 0) / goal;
+      if (ratio >= 1) return 'bg-white';
+      if (ratio >= 0.5) return 'bg-muted-foreground';
+      if (ratio > 0) return 'bg-muted';
+      return 'bg-secondary';
+    }
+
+    if (filteredHabits.length === 0) return 'bg-secondary';
     const relevant = Object.keys(logs).filter(id => filteredHabitIds.has(id));
     const completed = relevant.length / filteredHabits.length;
     if (completed >= 0.8) return 'bg-white';
@@ -76,6 +101,20 @@ export function CalendarScreen() {
     if (completed > 0) return 'bg-muted';
     return 'bg-secondary';
   };
+
+  const habitMonthStats = useMemo(() => {
+    if (!selectedHabit) return null;
+    const goal = selectedHabit.goal || 1;
+    let hit = 0;
+    let logged = 0;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const value = dayLogs[dateStr]?.[selectedHabit.id] ?? 0;
+      if (value > 0) logged++;
+      if (value >= goal) hit++;
+    }
+    return { hit, logged, total: daysInMonth };
+  }, [selectedHabit, dayLogs, viewMonth, viewYear, daysInMonth]);
 
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const emptyDays = Array.from({ length: startingDayOfWeek }, (_, i) => i);
@@ -126,6 +165,50 @@ export function CalendarScreen() {
           ))}
         </div>
       </div>
+
+      {filteredHabits.length > 0 && (
+        <div className="px-6 mb-4">
+          <div className="flex gap-2 overflow-x-auto pb-2">
+            <button onClick={() => setSelectedHabitId(null)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap border transition-colors ${
+                selectedHabitId === null ? 'bg-white text-black border-white' : 'bg-transparent text-muted-foreground border-border hover:text-white'
+              }`}>
+              All habits
+            </button>
+            {filteredHabits.map(h => {
+              const HabitIcon = getIcon(h.icon);
+              const isOn = selectedHabitId === h.id;
+              return (
+                <button key={h.id} onClick={() => setSelectedHabitId(h.id)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap border transition-colors flex items-center gap-1.5 ${
+                    isOn ? 'text-black border-transparent' : 'text-white border-border hover:bg-accent'
+                  }`}
+                  style={isOn ? { backgroundColor: h.color } : { backgroundColor: h.color + '20' }}>
+                  <HabitIcon className="w-3.5 h-3.5" style={{ color: isOn ? '#000' : h.color }} />
+                  {h.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {selectedHabit && habitMonthStats && (
+        <div className="px-6 mb-4">
+          <div className="bg-card rounded-2xl p-4 border border-border flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Tracking</p>
+              <p className="text-white font-medium" style={{ color: selectedHabit.color }}>{selectedHabit.name}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-muted-foreground mb-1">Goal hit this month</p>
+              <p className="text-white font-medium">
+                {habitMonthStats.hit} / {habitMonthStats.total} days
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="px-6">
         <div className="bg-card rounded-2xl p-6 border border-border">
