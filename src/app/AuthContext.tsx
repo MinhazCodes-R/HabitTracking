@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
+import { queryClient } from '@/lib/queryClient';
 import type { User, Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -18,15 +19,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const prevUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
+      prevUserIdRef.current = session?.user?.id ?? null;
       setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const nextUserId = session?.user?.id ?? null;
+      const prevUserId = prevUserIdRef.current;
+      if (prevUserId && prevUserId !== nextUserId) {
+        queryClient.removeQueries({ queryKey: ['user', prevUserId] });
+      }
+      prevUserIdRef.current = nextUserId;
       setSession(session);
       setUser(session?.user ?? null);
     });
