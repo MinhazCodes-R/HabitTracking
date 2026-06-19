@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router';
-import { MessageCircle, Globe, Users, Lock, Trash2 } from 'lucide-react';
+import { MessageCircle, Globe, Lock, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/app/AuthContext';
 import type { PostWithAuthor, Visibility } from '@/hooks/useJournal';
@@ -21,7 +21,6 @@ function relativeTime(iso: string): string {
 function VisibilityIcon({ visibility }: { visibility: Visibility }) {
   const cls = 'w-3 h-3 text-muted-foreground';
   if (visibility === 'public') return <Globe className={cls} />;
-  if (visibility === 'followers') return <Users className={cls} />;
   return <Lock className={cls} />;
 }
 
