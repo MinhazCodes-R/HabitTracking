@@ -7,6 +7,7 @@ export interface Habit {
   id: string;
   name: string;
   category: string;
+  group_id: string | null;
   metric_type: string;
   unit: string;
   goal: number;
@@ -55,6 +56,7 @@ export function useHabits() {
 
     setHabits(habitsData.map(h => ({
       ...h,
+      group_id: h.group_id ?? null,
       increments: h.increments ?? [10, 25, 50],
       icon: h.icon ?? 'circle',
       color: h.color ?? '#ffffff',
@@ -131,5 +133,18 @@ export function useHabits() {
     await supabase.from('habits').update({ archived: true }).eq('id', habitId);
   };
 
-  return { habits, setHabits, loading, createHabit, updateHabit, reorderHabits, logProgress, logProgressForDate, getHabitLogs, archiveHabit, refetch: fetchHabits };
+  // Bulk "check all" for a group. Idempotent: habits already at/past goal are skipped.
+  // Binary habits go to value=goal (1); quantitative habits jump to their goal value.
+  const logProgressForGroup = async (groupId: string) => {
+    if (!user) return;
+    const targets = habits.filter(h => h.group_id === groupId && h.current < h.goal);
+    if (targets.length === 0) return;
+
+    setHabits(prev => prev.map(h => h.group_id === groupId && h.current < h.goal ? { ...h, current: h.goal } : h));
+
+    const rows = targets.map(h => ({ habit_id: h.id, user_id: user.id, date: today, value: h.goal }));
+    await supabase.from('habit_logs').upsert(rows, { onConflict: 'habit_id,date' });
+  };
+
+  return { habits, setHabits, loading, createHabit, updateHabit, reorderHabits, logProgress, logProgressForDate, logProgressForGroup, getHabitLogs, archiveHabit, refetch: fetchHabits };
 }

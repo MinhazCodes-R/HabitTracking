@@ -3,6 +3,7 @@ import { ArrowLeft, Pencil, Check, X, Trash2 } from 'lucide-react';
 import { CalendarHeatmap } from '../components/CalendarHeatmap';
 import { useState, useEffect } from 'react';
 import { useHabits } from '@/hooks/useHabits';
+import { useHabitGroups } from '@/hooks/useHabitGroups';
 import { iconOptions, colorOptions, getIcon } from '@/lib/habitConfig';
 import { toLocalDateStr, displayUnit } from '@/lib/date';
 
@@ -12,6 +13,7 @@ export function HabitDetailScreen() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { habits, loading, logProgress, getHabitLogs, updateHabit, archiveHabit } = useHabits();
+  const { groups } = useHabitGroups();
   const [heatmapData, setHeatmapData] = useState<Record<string, number>>({});
   const [editingIncrements, setEditingIncrements] = useState(false);
   const [incValues, setIncValues] = useState<string[]>(['', '', '']);
@@ -119,6 +121,12 @@ export function HabitDetailScreen() {
             <select value={habit.category} onChange={(e) => updateHabit(habit.id, { category: e.target.value })}
               className="bg-transparent text-muted-foreground capitalize text-sm focus:outline-none cursor-pointer">
               {categories.map(cat => <option key={cat} value={cat} className="bg-card capitalize">{cat}</option>)}
+            </select>
+            <select value={habit.group_id ?? ''}
+              onChange={(e) => updateHabit(habit.id, { group_id: e.target.value === '' ? null : e.target.value })}
+              className="bg-transparent text-muted-foreground text-sm focus:outline-none cursor-pointer ml-3">
+              <option value="" className="bg-card">Ungrouped</option>
+              {groups.map(g => <option key={g.id} value={g.id} className="bg-card">{g.name}</option>)}
             </select>
           </div>
         </div>
