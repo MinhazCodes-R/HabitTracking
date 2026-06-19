@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { X } from 'lucide-react';
 import { useHabits } from '@/hooks/useHabits';
+import { useHabitGroups } from '@/hooks/useHabitGroups';
 import { iconOptions, colorOptions, getIcon } from '@/lib/habitConfig';
 
 const categories = ['Health', 'Fitness', 'Study', 'Productivity', 'Mindfulness', 'Finance', 'Personal', 'Custom'];
+const NEW_GROUP_SENTINEL = '__new__';
 const frequencies = ['Daily', 'Weekly', 'Specific Days', 'Custom'];
 const metricTypes = ['Boolean', 'Count', 'Duration', 'Quantity'];
 const units = ['ml', 'oz', 'minutes', 'hours', 'pages', 'reps', 'sessions'];
@@ -12,8 +14,11 @@ const units = ['ml', 'oz', 'minutes', 'hours', 'pages', 'reps', 'sessions'];
 export function CreateHabitScreen() {
   const navigate = useNavigate();
   const { createHabit } = useHabits();
+  const { groups, createGroup } = useHabitGroups();
   const [habitName, setHabitName] = useState('');
   const [category, setCategory] = useState('Health');
+  const [groupId, setGroupId] = useState<string>(''); // '' = Ungrouped
+  const [newGroupName, setNewGroupName] = useState('');
   const [frequency, setFrequency] = useState('Daily');
   const [metricType, setMetricType] = useState('Quantity');
   const [unit, setUnit] = useState('ml');
@@ -26,12 +31,22 @@ export function CreateHabitScreen() {
 
   const isBoolean = metricType === 'Boolean';
   const SelectedIcon = getIcon(icon);
+  const creatingNewGroup = groupId === NEW_GROUP_SENTINEL;
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    let resolvedGroupId: string | null = null;
+    if (creatingNewGroup) {
+      const created = await createGroup(newGroupName);
+      resolvedGroupId = created?.id ?? null;
+    } else if (groupId) {
+      resolvedGroupId = groupId;
+    }
+
     await createHabit({
       name: habitName,
       category: category.toLowerCase(),
+      group_id: resolvedGroupId,
       metric_type: metricType.toLowerCase(),
       unit: isBoolean ? 'done' : metricType === 'Count' ? 'times' : metricType === 'Duration' ? 'min' : unit,
       goal: isBoolean ? 1 : (Number(goal) || 1),
@@ -91,6 +106,21 @@ export function CreateHabitScreen() {
             className="w-full px-4 py-4 bg-input rounded-xl text-white border border-border focus:outline-none focus:border-white transition-colors appearance-none">
             {categories.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
           </select>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm text-muted-foreground">Group</label>
+          <select value={groupId} onChange={(e) => setGroupId(e.target.value)}
+            className="w-full px-4 py-4 bg-input rounded-xl text-white border border-border focus:outline-none focus:border-white transition-colors appearance-none">
+            <option value="">Ungrouped</option>
+            {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+            <option value={NEW_GROUP_SENTINEL}>+ Create new group...</option>
+          </select>
+          {creatingNewGroup && (
+            <input type="text" value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)}
+              placeholder="New group name" required
+              className="w-full px-4 py-4 bg-input rounded-xl text-white placeholder:text-muted-foreground border border-border focus:outline-none focus:border-white transition-colors mt-2" />
+          )}
         </div>
 
         <div className="space-y-2">
