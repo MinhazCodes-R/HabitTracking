@@ -8,6 +8,7 @@ import { CalendarScreen } from './screens/CalendarScreen';
 import { AnalyticsScreen } from './screens/AnalyticsScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { JournalScreen } from './screens/JournalScreen';
+import { PostThreadScreen } from './screens/PostThreadScreen';
 import { ManageGroupsScreen } from './screens/ManageGroupsScreen';
 
 export const router = createBrowserRouter([
@@ -19,6 +20,7 @@ export const router = createBrowserRouter([
   { path: '/calendar', Component: CalendarScreen },
   { path: '/analytics', Component: AnalyticsScreen },
   { path: '/journal', Component: JournalScreen },
+  { path: '/post/:id', Component: PostThreadScreen },
   { path: '/profile', Component: ProfileScreen },
   { path: '/groups', Component: ManageGroupsScreen },
 ]);
