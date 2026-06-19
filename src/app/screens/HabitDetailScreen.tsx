@@ -118,16 +118,24 @@ export function HabitDetailScreen() {
                 <Pencil className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
               </button>
             )}
-            <select value={habit.category} onChange={(e) => updateHabit(habit.id, { category: e.target.value })}
-              className="bg-transparent text-muted-foreground capitalize text-sm focus:outline-none cursor-pointer">
-              {categories.map(cat => <option key={cat} value={cat} className="bg-card capitalize">{cat}</option>)}
-            </select>
-            <select value={habit.group_id ?? ''}
-              onChange={(e) => updateHabit(habit.id, { group_id: e.target.value === '' ? null : e.target.value })}
-              className="bg-transparent text-muted-foreground text-sm focus:outline-none cursor-pointer ml-3">
-              <option value="" className="bg-card">Ungrouped</option>
-              {groups.map(g => <option key={g.id} value={g.id} className="bg-card">{g.name}</option>)}
-            </select>
+            <div className="flex gap-5 mt-1">
+              <div className="flex flex-col">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60">Category</span>
+                <select value={habit.category} onChange={(e) => updateHabit(habit.id, { category: e.target.value })}
+                  className="bg-transparent text-muted-foreground capitalize text-sm focus:outline-none cursor-pointer -ml-0.5">
+                  {categories.map(cat => <option key={cat} value={cat} className="bg-card capitalize">{cat}</option>)}
+                </select>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60">Group</span>
+                <select value={habit.group_id ?? ''}
+                  onChange={(e) => updateHabit(habit.id, { group_id: e.target.value === '' ? null : e.target.value })}
+                  className="bg-transparent text-muted-foreground text-sm focus:outline-none cursor-pointer -ml-0.5">
+                  <option value="" className="bg-card">Ungrouped</option>
+                  {groups.map(g => <option key={g.id} value={g.id} className="bg-card">{g.name}</option>)}
+                </select>
+              </div>
+            </div>
           </div>
         </div>
 
