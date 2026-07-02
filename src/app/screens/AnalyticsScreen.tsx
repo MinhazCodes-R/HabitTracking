@@ -1,51 +1,55 @@
 import { BottomNav } from '../components/BottomNav';
 import { TrendingUp, Award, Calendar, Target } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useHabits } from '@/hooks/useHabits';
 import { useAuth } from '../AuthContext';
 import { supabase } from '@/lib/supabase';
-import { useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import { toLocalDateStr } from '@/lib/date';
+import { qk } from '@/lib/queryKeys';
 
 export function AnalyticsScreen() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { habits } = useHabits();
-  const [weeklyData, setWeeklyData] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
-  const [avgCompletion, setAvgCompletion] = useState(0);
 
-  useEffect(() => {
-    if (!user || habits.length === 0) return;
+  const todayStr = toLocalDateStr(new Date());
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 6);
+  const weekStartStr = toLocalDateStr(weekAgo);
 
-    const today = new Date();
-    const weekAgo = new Date(today);
-    weekAgo.setDate(weekAgo.getDate() - 6);
+  const { data: weekLogs = [] } = useQuery({
+    queryKey: qk.weeklyStats(user?.id ?? '', weekStartStr),
+    queryFn: async () => {
+      const { data } = await supabase.from('habit_logs').select('date, value, habit_id')
+        .eq('user_id', user!.id)
+        .gte('date', weekStartStr)
+        .lte('date', todayStr);
+      return (data ?? []) as { date: string; value: number; habit_id: string }[];
+    },
+    enabled: !authLoading && !!user,
+  });
 
-    supabase.from('habit_logs').select('date, value, habit_id')
-      .eq('user_id', user.id)
-      .gte('date', toLocalDateStr(weekAgo))
-      .lte('date', toLocalDateStr(today))
-      .then(({ data }) => {
-        const habitMap = new Map(habits.map(h => [h.id, h.goal]));
-        const dailyScores: Record<string, number[]> = {};
+  const { weeklyData, avgCompletion } = useMemo(() => {
+    const habitMap = new Map(habits.map(h => [h.id, h.goal]));
+    const dailyScores: Record<string, number[]> = {};
 
-        (data ?? []).forEach(l => {
-          if (!dailyScores[l.date]) dailyScores[l.date] = [];
-          const goal = habitMap.get(l.habit_id) ?? 1;
-          dailyScores[l.date].push(Math.min(l.value / goal, 1) * 100);
-        });
+    weekLogs.forEach(l => {
+      if (!dailyScores[l.date]) dailyScores[l.date] = [];
+      const goal = habitMap.get(l.habit_id) ?? 1;
+      dailyScores[l.date].push(Math.min(l.value / goal, 1) * 100);
+    });
 
-        const weekly: number[] = [];
-        for (let i = 0; i < 7; i++) {
-          const d = new Date(weekAgo);
-          d.setDate(d.getDate() + i);
-          const key = toLocalDateStr(d);
-          const scores = dailyScores[key] ?? [];
-          weekly.push(scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0);
-        }
-        setWeeklyData(weekly);
-        const allScores = weekly.filter(s => s > 0);
-        setAvgCompletion(allScores.length ? Math.round(allScores.reduce((a, b) => a + b, 0) / allScores.length) : 0);
-      });
-  }, [user, habits]);
+    const weekly: number[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - 6 + i);
+      const scores = dailyScores[toLocalDateStr(d)] ?? [];
+      weekly.push(scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0);
+    }
+    const allScores = weekly.filter(s => s > 0);
+    const avg = allScores.length ? Math.round(allScores.reduce((a, b) => a + b, 0) / allScores.length) : 0;
+    return { weeklyData: weekly, avgCompletion: avg };
+  }, [habits, weekLogs, weekStartStr]);
 
   const weekStart = new Date();
   weekStart.setDate(weekStart.getDate() - 6);

@@ -1,9 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, CheckCircle, Plus, Minus } from 'lucide-react';
 import { BottomNav } from '../components/BottomNav';
-import { useHabits } from '@/hooks/useHabits';
-import { supabase } from '@/lib/supabase';
-import { useAuth } from '../AuthContext';
+import { useHabits, useDayLogs } from '@/hooks/useHabits';
 import { displayUnit, toLocalDateStr } from '@/lib/date';
 import { getIcon } from '@/lib/habitConfig';
 
@@ -11,7 +9,6 @@ const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'Jul
 const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export function CalendarScreen() {
-  const { user } = useAuth();
   const { habits, logProgressForDate } = useHabits();
   const today = new Date();
   const todayStr = toLocalDateStr(today);
@@ -20,7 +17,7 @@ export function CalendarScreen() {
   const [selectedDate, setSelectedDate] = useState<number | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedHabitId, setSelectedHabitId] = useState<string | null>(null);
-  const [dayLogs, setDayLogs] = useState<Record<string, Record<string, number>>>({});
+  const { dayLogs, setDayLog } = useDayLogs(viewYear, viewMonth);
 
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
   const startingDayOfWeek = new Date(viewYear, viewMonth, 1).getDay();
@@ -59,24 +56,6 @@ export function CalendarScreen() {
       setSelectedHabitId(null);
     }
   }, [filteredHabits, selectedHabitId]);
-
-  useEffect(() => {
-    if (!user) return;
-    const mm = String(viewMonth + 1).padStart(2, '0');
-    const from = `${viewYear}-${mm}-01`;
-    const to = `${viewYear}-${mm}-${daysInMonth}`;
-
-    supabase.from('habit_logs').select('habit_id, date, value')
-      .eq('user_id', user.id).gte('date', from).lte('date', to)
-      .then(({ data }) => {
-        const map: Record<string, Record<string, number>> = {};
-        (data ?? []).forEach(l => {
-          if (!map[l.date]) map[l.date] = {};
-          map[l.date][l.habit_id] = l.value;
-        });
-        setDayLogs(map);
-      });
-  }, [user, viewMonth, viewYear, daysInMonth]);
 
   const getCompletionLevel = (day: number) => {
     const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -126,14 +105,7 @@ export function CalendarScreen() {
   const updateSelectedLog = (habitId: string, value: number) => {
     if (!canEditSelected) return;
     const clamped = Math.max(0, value);
-    setDayLogs(prev => {
-      const next = { ...prev };
-      const day = { ...(next[selectedDateStr] ?? {}) };
-      if (clamped === 0) delete day[habitId];
-      else day[habitId] = clamped;
-      next[selectedDateStr] = day;
-      return next;
-    });
+    setDayLog(selectedDateStr, habitId, clamped);
     logProgressForDate(habitId, clamped, selectedDateStr);
   };
 

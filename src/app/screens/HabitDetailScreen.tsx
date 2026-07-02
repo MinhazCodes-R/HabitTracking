@@ -2,7 +2,7 @@ import { useParams, useNavigate } from 'react-router';
 import { ArrowLeft, Pencil, Check, X, Trash2 } from 'lucide-react';
 import { HabitMiniCalendar } from '../components/HabitMiniCalendar';
 import { useState, useEffect } from 'react';
-import { useHabits } from '@/hooks/useHabits';
+import { useHabits, useHabitLogs } from '@/hooks/useHabits';
 import { useHabitGroups } from '@/hooks/useHabitGroups';
 import { iconOptions, colorOptions, getIcon } from '@/lib/habitConfig';
 import { toLocalDateStr, displayUnit } from '@/lib/date';
@@ -12,9 +12,9 @@ const categories = ['health', 'fitness', 'study', 'productivity', 'mindfulness',
 export function HabitDetailScreen() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { habits, loading, logProgress, getHabitLogs, updateHabit, archiveHabit } = useHabits();
+  const { habits, loading, logProgress, updateHabit, archiveHabit } = useHabits();
   const { groups } = useHabitGroups();
-  const [heatmapData, setHeatmapData] = useState<Record<string, number>>({});
+  const { logs: heatmapData } = useHabitLogs(id);
   const [editingIncrements, setEditingIncrements] = useState(false);
   const [incValues, setIncValues] = useState<string[]>(['', '', '']);
   const [editingName, setEditingName] = useState(false);
@@ -23,11 +23,6 @@ export function HabitDetailScreen() {
   const [showColorPicker, setShowColorPicker] = useState(false);
 
   const habit = habits.find(h => h.id === id);
-
-  useEffect(() => {
-    if (!id) return;
-    getHabitLogs(id).then(data => setHeatmapData(data ?? {}));
-  }, [id, habits]);
 
   useEffect(() => {
     if (habit) {
