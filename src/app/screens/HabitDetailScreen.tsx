@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router';
 import { ArrowLeft, Pencil, Check, X, Trash2 } from 'lucide-react';
-import { CalendarHeatmap } from '../components/CalendarHeatmap';
+import { HabitMiniCalendar } from '../components/HabitMiniCalendar';
 import { useState, useEffect } from 'react';
 import { useHabits } from '@/hooks/useHabits';
 import { useHabitGroups } from '@/hooks/useHabitGroups';
@@ -44,11 +44,6 @@ export function HabitDetailScreen() {
   const isDone = habit.current >= habit.goal;
   const progress = Math.min((habit.current / habit.goal) * 100, 100);
   const unitLabel = displayUnit(habit.metric_type, habit.unit);
-
-  const normalizedHeatmap: Record<string, number> = {};
-  for (const [date, value] of Object.entries(heatmapData)) {
-    normalizedHeatmap[date] = Math.min(value / habit.goal, 1);
-  }
 
   const addProgress = async (amount: number) => {
     const newValue = Math.min(habit.current + amount, habit.goal);
@@ -248,7 +243,7 @@ export function HabitDetailScreen() {
       </div>
 
       <div className="px-6 mb-6">
-        <CalendarHeatmap data={normalizedHeatmap} />
+        <HabitMiniCalendar habitId={habit.id} goal={habit.goal} />
       </div>
 
       <div className="px-6">
