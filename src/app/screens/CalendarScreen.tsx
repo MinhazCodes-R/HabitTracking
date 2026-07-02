@@ -5,7 +5,6 @@ import { useHabits } from '@/hooks/useHabits';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '../AuthContext';
 import { displayUnit, toLocalDateStr } from '@/lib/date';
-import { displayUnit } from '@/lib/date';
 import { getIcon } from '@/lib/habitConfig';
 
 const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
