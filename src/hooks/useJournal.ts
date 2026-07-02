@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/app/AuthContext';
 import { fetchProfilesByIds, type Profile } from '@/hooks/useProfile';
 
-export type Visibility = 'private' | 'followers' | 'public';
+export type Visibility = 'private' | 'public';
 
 export interface JournalEntry {
   id: string;
@@ -44,65 +44,8 @@ async function hydratePosts(rows: JournalEntry[]): Promise<PostWithAuthor[]> {
   }));
 }
 
-// "Your Posts" — current user's top-level entries, reverse-chron.
-export function useJournal() {
-  const { user, loading: authLoading } = useAuth();
-  const [entries, setEntries] = useState<JournalEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchEntries = useCallback(async () => {
-    if (!user) {
-      setEntries([]);
-      setLoading(false);
-      return;
-    }
-    const { data } = await supabase
-      .from('journal_entries')
-      .select(POST_FIELDS)
-      .eq('user_id', user.id)
-      .is('parent_id', null)
-      .order('created_at', { ascending: false })
-      .limit(200);
-    setEntries((data ?? []) as JournalEntry[]);
-    setLoading(false);
-  }, [user?.id]);
-
-  useEffect(() => {
-    if (authLoading) return;
-    fetchEntries();
-  }, [authLoading, fetchEntries]);
-
-  const createEntry = async (
-    body: string,
-    opts: { visibility?: Visibility; parentId?: string | null } = {},
-  ): Promise<JournalEntry | null> => {
-    const trimmed = body.trim();
-    if (!user || !trimmed) return null;
-    const visibility = opts.visibility ?? 'private';
-    const parent_id = opts.parentId ?? null;
-    const { data } = await supabase
-      .from('journal_entries')
-      .insert({ user_id: user.id, body: trimmed, visibility, parent_id })
-      .select(POST_FIELDS)
-      .single();
-    if (!data) return null;
-    const entry = data as JournalEntry;
-    if (!parent_id) {
-      setEntries(prev => [entry, ...prev]);
-    }
-    return entry;
-  };
-
-  const deleteEntry = async (id: string) => {
-    setEntries(prev => prev.filter(e => e.id !== id));
-    await supabase.from('journal_entries').delete().eq('id', id);
-  };
-
-  return { entries, loading, createEntry, deleteEntry, refetch: fetchEntries };
-}
-
-// "For You" feed — public top-level posts + posts from anyone the user follows
-// (RLS already filters to what the user is allowed to see; here we just narrow further).
+// Single chronological feed: your own posts (any visibility) + everyone's
+// public posts. Top-level only; replies live in the thread view.
 export function useFeed() {
   const { user, loading: authLoading } = useAuth();
   const [posts, setPosts] = useState<PostWithAuthor[]>([]);
@@ -111,17 +54,6 @@ export function useFeed() {
   const fetchFeed = useCallback(async () => {
     setLoading(true);
 
-    let followingIds: string[] = [];
-    if (user) {
-      const { data: followRows } = await supabase
-        .from('follows')
-        .select('following_id')
-        .eq('follower_id', user.id);
-      followingIds = (followRows ?? []).map(r => r.following_id as string);
-    }
-
-    // We want: top-level posts where visibility = public OR (the author is followed and visibility in (followers, public)) OR author = me.
-    // RLS already enforces the legality of the read; we just have to filter what makes it into the feed.
     let query = supabase
       .from('journal_entries')
       .select(POST_FIELDS)
@@ -130,9 +62,7 @@ export function useFeed() {
       .limit(100);
 
     if (user) {
-      const authorScope = [user.id, ...followingIds];
-      // Posts that are either public OR written by an author in scope (which RLS will further validate).
-      query = query.or(`visibility.eq.public,user_id.in.(${authorScope.join(',')})`);
+      query = query.or(`visibility.eq.public,user_id.eq.${user.id}`);
     } else {
       query = query.eq('visibility', 'public');
     }
@@ -148,11 +78,38 @@ export function useFeed() {
     fetchFeed();
   }, [authLoading, fetchFeed]);
 
-  return { posts, loading, refetch: fetchFeed };
+  const createPost = async (
+    body: string,
+    opts: { visibility?: Visibility; parentId?: string | null } = {},
+  ): Promise<JournalEntry | null> => {
+    const trimmed = body.trim();
+    if (!user || !trimmed) return null;
+    const visibility = opts.visibility ?? 'private';
+    const parent_id = opts.parentId ?? null;
+    const { data } = await supabase
+      .from('journal_entries')
+      .insert({ user_id: user.id, body: trimmed, visibility, parent_id })
+      .select(POST_FIELDS)
+      .single();
+    if (!data) return null;
+    const entry = data as JournalEntry;
+    if (!parent_id) {
+      fetchFeed();
+    }
+    return entry;
+  };
+
+  const deletePost = async (id: string) => {
+    setPosts(prev => prev.filter(p => p.id !== id));
+    await supabase.from('journal_entries').delete().eq('id', id);
+  };
+
+  return { posts, loading, createPost, deletePost, refetch: fetchFeed };
 }
 
 // A single post + its direct replies. One level of nesting for MVP.
 export function useThread(postId: string | undefined) {
+  const { user } = useAuth();
   const [root, setRoot] = useState<PostWithAuthor | null>(null);
   const [replies, setReplies] = useState<PostWithAuthor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -199,10 +156,30 @@ export function useThread(postId: string | undefined) {
     fetchThread();
   }, [fetchThread]);
 
-  const addReply = (reply: PostWithAuthor) => {
+  const createReply = async (body: string, visibility: Visibility): Promise<void> => {
+    if (!postId || !user) return;
+    const trimmed = body.trim();
+    if (!trimmed) return;
+    const { data } = await supabase
+      .from('journal_entries')
+      .insert({ user_id: user.id, body: trimmed, visibility, parent_id: postId })
+      .select(POST_FIELDS)
+      .single();
+    if (!data) return;
+    const authors = await fetchProfilesByIds([user.id]);
+    const reply: PostWithAuthor = {
+      ...(data as JournalEntry),
+      author: authors.get(user.id) ?? null,
+      reply_count: 0,
+    };
     setReplies(prev => [...prev, reply]);
     setRoot(prev => prev ? { ...prev, reply_count: prev.reply_count + 1 } : prev);
   };
 
-  return { root, replies, loading, notFound, refetch: fetchThread, addReply };
+  const deletePost = async (id: string) => {
+    setReplies(prev => prev.filter(r => r.id !== id));
+    await supabase.from('journal_entries').delete().eq('id', id);
+  };
+
+  return { root, replies, loading, notFound, refetch: fetchThread, createReply, deletePost };
 }

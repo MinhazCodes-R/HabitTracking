@@ -1,13 +1,11 @@
 -- Run this in Supabase SQL Editor.
 -- Adds the social layer on top of the existing journal_entries table:
 --   * profiles (username/display_name/avatar/bio) keyed by auth.users.id
---   * follows (directed graph)
---   * journal_entries: parent_id (self-FK for threaded replies) + visibility enum
---   * RLS so a post is readable when:
---       - it's yours, OR
---       - visibility = 'public', OR
---       - visibility = 'followers' AND viewer follows the author
--- Safe to re-run.
+--   * journal_entries: parent_id (self-FK for threaded replies) + visibility ('private' | 'public')
+--   * RLS so a post is readable when it's yours OR visibility = 'public'
+-- Idempotent: safe to re-run, and safe to run after an older revision of this
+-- migration that included a 'followers' tier + follows table — those get
+-- downgraded/removed in place.
 
 -- 1. profiles
 create table if not exists profiles (
@@ -66,41 +64,20 @@ select u.id, coalesce(u.raw_user_meta_data->>'full_name', null)
 from auth.users u
 on conflict (id) do nothing;
 
--- 2. follows
-create table if not exists follows (
-  follower_id uuid references auth.users(id) on delete cascade not null,
-  following_id uuid references auth.users(id) on delete cascade not null,
-  created_at timestamptz default now(),
-  primary key (follower_id, following_id),
-  check (follower_id <> following_id)
-);
-
-create index if not exists follows_following_idx on follows(following_id);
-
-alter table follows enable row level security;
-
-do $$ begin
-  if not exists (select 1 from pg_policies where policyname = 'Follows are readable by anyone authed') then
-    create policy "Follows are readable by anyone authed"
-      on follows for select using (auth.role() = 'authenticated');
-  end if;
-  if not exists (select 1 from pg_policies where policyname = 'Users can follow as themselves') then
-    create policy "Users can follow as themselves"
-      on follows for insert with check (auth.uid() = follower_id);
-  end if;
-  if not exists (select 1 from pg_policies where policyname = 'Users can unfollow their own follows') then
-    create policy "Users can unfollow their own follows"
-      on follows for delete using (auth.uid() = follower_id);
-  end if;
-end $$;
-
--- 3. journal_entries: parent_id + visibility
+-- 2. journal_entries: parent_id + visibility ('private' | 'public')
 alter table journal_entries
   add column if not exists parent_id uuid references journal_entries(id) on delete cascade;
 
 alter table journal_entries
-  add column if not exists visibility text not null default 'private'
-    check (visibility in ('private', 'followers', 'public'));
+  add column if not exists visibility text not null default 'private';
+
+-- Downgrade any 'followers' rows from an earlier migration revision.
+update journal_entries set visibility = 'public' where visibility = 'followers';
+
+-- Replace the visibility check constraint (older revisions allowed 'followers').
+alter table journal_entries drop constraint if exists journal_entries_visibility_check;
+alter table journal_entries add constraint journal_entries_visibility_check
+  check (visibility in ('private', 'public'));
 
 create index if not exists journal_entries_parent_idx
   on journal_entries(parent_id, created_at);
@@ -109,33 +86,25 @@ create index if not exists journal_entries_public_feed_idx
   on journal_entries(created_at desc)
   where visibility = 'public' and parent_id is null;
 
--- Replace the existing single-user read policy with a social-aware one.
+-- 3. RLS: replace any prior read policy with the simpler own-or-public one.
 do $$ begin
   if exists (select 1 from pg_policies
              where policyname = 'Users can read own journal_entries'
                and tablename = 'journal_entries') then
     drop policy "Users can read own journal_entries" on journal_entries;
   end if;
-  if not exists (select 1 from pg_policies
-                 where policyname = 'Users can read visible journal_entries'
-                   and tablename = 'journal_entries') then
-    create policy "Users can read visible journal_entries"
-      on journal_entries for select using (
-        auth.uid() = user_id
-        or visibility = 'public'
-        or (
-          visibility = 'followers'
-          and exists (
-            select 1 from follows
-            where follower_id = auth.uid()
-              and following_id = journal_entries.user_id
-          )
-        )
-      );
+  if exists (select 1 from pg_policies
+             where policyname = 'Users can read visible journal_entries'
+               and tablename = 'journal_entries') then
+    drop policy "Users can read visible journal_entries" on journal_entries;
   end if;
+  create policy "Users can read visible journal_entries"
+    on journal_entries for select using (
+      auth.uid() = user_id or visibility = 'public'
+    );
 end $$;
 
--- Update policy so users can edit their own entries (used for future edit-post UX; safe additive).
+-- Update policy (additive; allows future edit-post UX).
 do $$ begin
   if not exists (select 1 from pg_policies
                  where policyname = 'Users can update own journal_entries'
@@ -144,3 +113,7 @@ do $$ begin
       on journal_entries for update using (auth.uid() = user_id);
   end if;
 end $$;
+
+-- 4. Drop follows table if a prior revision created it. The follow-graph
+-- feature was deferred; we'll add it back when we need it.
+drop table if exists follows;

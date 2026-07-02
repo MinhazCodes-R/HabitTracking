@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { ChevronDown, Globe, Users, Lock } from 'lucide-react';
+import { ChevronDown, Globe, Lock } from 'lucide-react';
 import type { Visibility } from '@/hooks/useJournal';
 
 const visibilityOptions: { value: Visibility; label: string; icon: typeof Globe }[] = [
   { value: 'public', label: 'Public', icon: Globe },
-  { value: 'followers', label: 'Followers', icon: Users },
   { value: 'private', label: 'Only me', icon: Lock },
 ];
 

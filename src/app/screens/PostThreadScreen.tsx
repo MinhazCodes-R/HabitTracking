@@ -3,28 +3,15 @@ import { ArrowLeft } from 'lucide-react';
 import { BottomNav } from '../components/BottomNav';
 import { PostCard } from '../components/PostCard';
 import { PostComposer } from '../components/PostComposer';
-import { useThread, useJournal, type PostWithAuthor, type Visibility } from '@/hooks/useJournal';
-import { fetchProfilesByIds } from '@/hooks/useProfile';
-import { useAuth } from '@/app/AuthContext';
+import { useThread, type Visibility } from '@/hooks/useJournal';
 
 export function PostThreadScreen() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const { root, replies, loading, notFound, addReply } = useThread(id);
-  const { createEntry, deleteEntry } = useJournal();
+  const { root, replies, loading, notFound, createReply, deletePost } = useThread(id);
 
   const handleReply = async (body: string, visibility: Visibility) => {
-    if (!id) return;
-    const entry = await createEntry(body, { parentId: id, visibility });
-    if (!entry || !user) return;
-    const authors = await fetchProfilesByIds([entry.user_id]);
-    const hydrated: PostWithAuthor = {
-      ...entry,
-      author: authors.get(entry.user_id) ?? null,
-      reply_count: 0,
-    };
-    addReply(hydrated);
+    await createReply(body, visibility);
   };
 
   return (
@@ -47,14 +34,14 @@ export function PostThreadScreen() {
             <PostCard
               post={root}
               clickable={false}
-              onDelete={() => { deleteEntry(root.id); navigate(-1); }}
+              onDelete={() => { deletePost(root.id); navigate(-1); }}
             />
 
             <div className="pt-4">
               <PostComposer
                 onSubmit={handleReply}
                 placeholder="Post your reply"
-                defaultVisibility={root.visibility === 'public' ? 'public' : root.visibility}
+                defaultVisibility={root.visibility}
                 submitLabel="Reply"
                 autoFocus
               />
@@ -67,7 +54,7 @@ export function PostThreadScreen() {
                   <PostCard
                     key={r.id}
                     post={r}
-                    onDelete={() => deleteEntry(r.id)}
+                    onDelete={() => deletePost(r.id)}
                   />
                 ))}
               </div>
