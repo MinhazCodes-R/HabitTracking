@@ -10,6 +10,9 @@ import { ProfileScreen } from './screens/ProfileScreen';
 import { JournalScreen } from './screens/JournalScreen';
 import { PostThreadScreen } from './screens/PostThreadScreen';
 import { ManageGroupsScreen } from './screens/ManageGroupsScreen';
+import { WorkoutsScreen } from './screens/WorkoutsScreen';
+import { WorkoutBuilderScreen } from './screens/WorkoutBuilderScreen';
+import { WorkoutSessionScreen } from './screens/WorkoutSessionScreen';
 
 export const router = createBrowserRouter([
   { path: '/', Component: LoginScreen },
@@ -23,4 +26,8 @@ export const router = createBrowserRouter([
   { path: '/post/:id', Component: PostThreadScreen },
   { path: '/profile', Component: ProfileScreen },
   { path: '/groups', Component: ManageGroupsScreen },
+  { path: '/workouts', Component: WorkoutsScreen },
+  { path: '/workouts/new', Component: WorkoutBuilderScreen },
+  { path: '/workouts/:id/edit', Component: WorkoutBuilderScreen },
+  { path: '/workouts/:id/session', Component: WorkoutSessionScreen },
 ]);

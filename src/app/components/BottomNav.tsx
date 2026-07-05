@@ -1,4 +1,4 @@
-import { Home, Calendar, BarChart3, NotebookPen, User } from 'lucide-react';
+import { Home, Calendar, BarChart3, NotebookPen, User, Dumbbell } from 'lucide-react';
 import { Link, useLocation } from 'react-router';
 
 export function BottomNav() {
@@ -7,6 +7,7 @@ export function BottomNav() {
   const navItems = [
     { icon: Home, label: 'Home', path: '/home' },
     { icon: Calendar, label: 'Calendar', path: '/calendar' },
+    { icon: Dumbbell, label: 'Workouts', path: '/workouts' },
     { icon: NotebookPen, label: 'Journal', path: '/journal' },
     { icon: BarChart3, label: 'Analytics', path: '/analytics' },
     { icon: User, label: 'Profile', path: '/profile' },
@@ -21,7 +22,7 @@ export function BottomNav() {
             <Link
               key={path}
               to={path}
-              className="flex flex-col items-center gap-1 min-w-[52px]"
+              className="flex flex-col items-center gap-1 min-w-[44px]"
             >
               <Icon
                 className={`w-6 h-6 ${isActive ? 'text-white' : 'text-muted-foreground'}`}
