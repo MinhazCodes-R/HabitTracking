@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
-import { X } from 'lucide-react';
+import { Link, useNavigate } from 'react-router';
+import { X, Dumbbell, ChevronRight } from 'lucide-react';
 import { useHabits } from '@/hooks/useHabits';
 import { useHabitGroups } from '@/hooks/useHabitGroups';
 import { iconOptions, colorOptions, getIcon } from '@/lib/habitConfig';
@@ -65,6 +65,21 @@ export function CreateHabitScreen() {
         <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center hover:bg-accent transition-colors">
           <X className="w-5 h-5 text-white" />
         </button>
+      </div>
+
+      <div className="px-6 pb-6">
+        <Link to="/workouts/new" className="flex items-center justify-between bg-card rounded-2xl p-4 border border-border hover:bg-accent transition-colors">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center">
+              <Dumbbell className="w-5 h-5 text-orange-400" />
+            </div>
+            <div>
+              <p className="text-white text-sm font-medium">Building an exercise habit?</p>
+              <p className="text-xs text-muted-foreground">Create a full workout with sets, reps &amp; rest timers</p>
+            </div>
+          </div>
+          <ChevronRight className="w-4 h-4 text-muted-foreground" />
+        </Link>
       </div>
 
       <form onSubmit={handleSave} className="px-6 space-y-6 pb-12">
