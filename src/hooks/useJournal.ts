@@ -1,7 +1,8 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/app/AuthContext';
 import { fetchProfilesByIds, type Profile } from '@/hooks/useProfile';
+import { qk, ANON } from '@/lib/queryKeys';
 
 export type Visibility = 'private' | 'public';
 
@@ -17,6 +18,11 @@ export interface JournalEntry {
 export interface PostWithAuthor extends JournalEntry {
   author: Profile | null;
   reply_count: number;
+}
+
+interface Thread {
+  root: PostWithAuthor | null;
+  replies: PostWithAuthor[];
 }
 
 const POST_FIELDS = 'id, user_id, body, created_at, parent_id, visibility';
@@ -48,35 +54,33 @@ async function hydratePosts(rows: JournalEntry[]): Promise<PostWithAuthor[]> {
 // public posts. Top-level only; replies live in the thread view.
 export function useFeed() {
   const { user, loading: authLoading } = useAuth();
-  const [posts, setPosts] = useState<PostWithAuthor[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const uid = user?.id ?? ANON;
+  const feedKey = qk.feed(uid);
 
-  const fetchFeed = useCallback(async () => {
-    setLoading(true);
+  const { data: posts = [], isPending, refetch } = useQuery({
+    queryKey: feedKey,
+    queryFn: async () => {
+      let query = supabase
+        .from('journal_entries')
+        .select(POST_FIELDS)
+        .is('parent_id', null)
+        .order('created_at', { ascending: false })
+        .limit(100);
 
-    let query = supabase
-      .from('journal_entries')
-      .select(POST_FIELDS)
-      .is('parent_id', null)
-      .order('created_at', { ascending: false })
-      .limit(100);
+      if (user) {
+        query = query.or(`visibility.eq.public,user_id.eq.${user.id}`);
+      } else {
+        query = query.eq('visibility', 'public');
+      }
 
-    if (user) {
-      query = query.or(`visibility.eq.public,user_id.eq.${user.id}`);
-    } else {
-      query = query.eq('visibility', 'public');
-    }
+      const { data } = await query;
+      return hydratePosts((data ?? []) as JournalEntry[]);
+    },
+    enabled: !authLoading,
+  });
 
-    const { data } = await query;
-    const hydrated = await hydratePosts((data ?? []) as JournalEntry[]);
-    setPosts(hydrated);
-    setLoading(false);
-  }, [user?.id]);
-
-  useEffect(() => {
-    if (authLoading) return;
-    fetchFeed();
-  }, [authLoading, fetchFeed]);
+  const loading = authLoading || isPending;
 
   const createPost = async (
     body: string,
@@ -94,67 +98,59 @@ export function useFeed() {
     if (!data) return null;
     const entry = data as JournalEntry;
     if (!parent_id) {
-      fetchFeed();
+      refetch();
     }
     return entry;
   };
 
   const deletePost = async (id: string) => {
-    setPosts(prev => prev.filter(p => p.id !== id));
+    queryClient.setQueryData<PostWithAuthor[]>(feedKey, prev => (prev ?? []).filter(p => p.id !== id));
     await supabase.from('journal_entries').delete().eq('id', id);
   };
 
-  return { posts, loading, createPost, deletePost, refetch: fetchFeed };
+  return { posts, loading, createPost, deletePost, refetch };
 }
 
 // A single post + its direct replies. One level of nesting for MVP.
 export function useThread(postId: string | undefined) {
-  const { user } = useAuth();
-  const [root, setRoot] = useState<PostWithAuthor | null>(null);
-  const [replies, setReplies] = useState<PostWithAuthor[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
+  const { user, loading: authLoading } = useAuth();
+  const queryClient = useQueryClient();
+  const uid = user?.id ?? ANON;
+  const threadKey = qk.thread(uid, postId ?? '');
 
-  const fetchThread = useCallback(async () => {
-    if (!postId) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setNotFound(false);
+  const { data, isPending, refetch } = useQuery({
+    queryKey: threadKey,
+    queryFn: async (): Promise<Thread> => {
+      const { data: rootRow } = await supabase
+        .from('journal_entries')
+        .select(POST_FIELDS)
+        .eq('id', postId!)
+        .maybeSingle();
 
-    const { data: rootRow } = await supabase
-      .from('journal_entries')
-      .select(POST_FIELDS)
-      .eq('id', postId)
-      .maybeSingle();
+      if (!rootRow) return { root: null, replies: [] };
 
-    if (!rootRow) {
-      setRoot(null);
-      setReplies([]);
-      setNotFound(true);
-      setLoading(false);
-      return;
-    }
+      const { data: replyRows } = await supabase
+        .from('journal_entries')
+        .select(POST_FIELDS)
+        .eq('parent_id', postId!)
+        .order('created_at', { ascending: true })
+        .limit(200);
 
-    const { data: replyRows } = await supabase
-      .from('journal_entries')
-      .select(POST_FIELDS)
-      .eq('parent_id', postId)
-      .order('created_at', { ascending: true })
-      .limit(200);
+      const [rootHydrated] = await hydratePosts([rootRow as JournalEntry]);
+      const repliesHydrated = await hydratePosts((replyRows ?? []) as JournalEntry[]);
+      return { root: rootHydrated ?? null, replies: repliesHydrated };
+    },
+    enabled: !authLoading && !!postId,
+  });
 
-    const [rootHydrated] = await hydratePosts([rootRow as JournalEntry]);
-    const repliesHydrated = await hydratePosts((replyRows ?? []) as JournalEntry[]);
+  const loading = authLoading || isPending;
+  const root = data?.root ?? null;
+  const replies = data?.replies ?? [];
+  const notFound = !loading && !!data && data.root === null;
 
-    setRoot(rootHydrated ?? null);
-    setReplies(repliesHydrated);
-    setLoading(false);
-  }, [postId]);
-
-  useEffect(() => {
-    fetchThread();
-  }, [fetchThread]);
+  const setCached = (updater: (prev: Thread) => Thread) => {
+    queryClient.setQueryData<Thread>(threadKey, prev => updater(prev ?? { root: null, replies: [] }));
+  };
 
   const createReply = async (body: string, visibility: Visibility): Promise<void> => {
     if (!postId || !user) return;
@@ -172,14 +168,19 @@ export function useThread(postId: string | undefined) {
       author: authors.get(user.id) ?? null,
       reply_count: 0,
     };
-    setReplies(prev => [...prev, reply]);
-    setRoot(prev => prev ? { ...prev, reply_count: prev.reply_count + 1 } : prev);
+    setCached(prev => ({
+      root: prev.root ? { ...prev.root, reply_count: prev.root.reply_count + 1 } : prev.root,
+      replies: [...prev.replies, reply],
+    }));
+    // Reply counts shown on the feed are now stale.
+    queryClient.invalidateQueries({ queryKey: qk.feed(uid) });
   };
 
   const deletePost = async (id: string) => {
-    setReplies(prev => prev.filter(r => r.id !== id));
+    setCached(prev => ({ ...prev, replies: prev.replies.filter(r => r.id !== id) }));
     await supabase.from('journal_entries').delete().eq('id', id);
+    queryClient.invalidateQueries({ queryKey: qk.feed(uid) });
   };
 
-  return { root, replies, loading, notFound, refetch: fetchThread, createReply, deletePost };
+  return { root, replies, loading, notFound, refetch, createReply, deletePost };
 }

@@ -1,18 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/app/AuthContext';
+import { useHabitMonthLogs } from '@/hooks/useHabits';
 
 const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const dayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
 // Miniature month calendar for a single habit — same shading scale as CalendarScreen.
 export function HabitMiniCalendar({ habitId, goal }: { habitId: string; goal: number }) {
-  const { user } = useAuth();
   const today = new Date();
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [viewYear, setViewYear] = useState(today.getFullYear());
-  const [logs, setLogs] = useState<Record<string, number>>({});
+  const logs = useHabitMonthLogs(habitId, viewYear, viewMonth);
 
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
   const startingDayOfWeek = new Date(viewYear, viewMonth, 1).getDay();
@@ -26,22 +24,6 @@ export function HabitMiniCalendar({ habitId, goal }: { habitId: string; goal: nu
     if (viewMonth === 11) { setViewMonth(0); setViewYear(viewYear + 1); }
     else setViewMonth(viewMonth + 1);
   };
-
-  useEffect(() => {
-    if (!user) return;
-    const mm = String(viewMonth + 1).padStart(2, '0');
-    const from = `${viewYear}-${mm}-01`;
-    const to = `${viewYear}-${mm}-${daysInMonth}`;
-
-    supabase.from('habit_logs').select('date, value')
-      .eq('habit_id', habitId).eq('user_id', user.id)
-      .gte('date', from).lte('date', to)
-      .then(({ data }) => {
-        const map: Record<string, number> = {};
-        (data ?? []).forEach(l => { map[l.date] = l.value; });
-        setLogs(map);
-      });
-  }, [user, habitId, viewMonth, viewYear, daysInMonth]);
 
   const getCompletionLevel = (day: number) => {
     const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;

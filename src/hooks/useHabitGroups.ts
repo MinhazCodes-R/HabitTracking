@@ -1,6 +1,7 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/app/AuthContext';
+import { qk } from '@/lib/queryKeys';
 
 export interface HabitGroup {
   id: string;
@@ -12,30 +13,28 @@ export interface HabitGroup {
 
 export function useHabitGroups() {
   const { user, loading: authLoading } = useAuth();
-  const [groups, setGroups] = useState<HabitGroup[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const uid = user?.id ?? '';
+  const groupsKey = qk.groups(uid);
 
-  const fetchGroups = useCallback(async () => {
-    if (!user) {
-      setGroups([]);
-      setLoading(false);
-      return;
-    }
+  const { data: groups = [], isPending, refetch } = useQuery({
+    queryKey: groupsKey,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('habit_groups')
+        .select('id, name, icon, color, position')
+        .eq('user_id', uid)
+        .order('position', { ascending: true });
+      return (data ?? []) as HabitGroup[];
+    },
+    enabled: !authLoading && !!user,
+  });
 
-    const { data } = await supabase
-      .from('habit_groups')
-      .select('id, name, icon, color, position')
-      .eq('user_id', user.id)
-      .order('position', { ascending: true });
+  const loading = authLoading || (!!user && isPending);
 
-    setGroups((data ?? []) as HabitGroup[]);
-    setLoading(false);
-  }, [user?.id]);
-
-  useEffect(() => {
-    if (authLoading) return;
-    fetchGroups();
-  }, [authLoading, fetchGroups]);
+  const setCached = (updater: (prev: HabitGroup[]) => HabitGroup[]) => {
+    queryClient.setQueryData<HabitGroup[]>(groupsKey, prev => updater(prev ?? []));
+  };
 
   const createGroup = async (name: string, icon?: string, color?: string): Promise<HabitGroup | null> => {
     if (!user || !name.trim()) return null;
@@ -47,19 +46,19 @@ export function useHabitGroups() {
       .single();
     if (!data) return null;
     const group = data as HabitGroup;
-    setGroups(prev => [...prev, group]);
+    setCached(prev => [...prev, group]);
     return group;
   };
 
   const renameGroup = async (groupId: string, name: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    setGroups(prev => prev.map(g => g.id === groupId ? { ...g, name: trimmed } : g));
+    setCached(prev => prev.map(g => g.id === groupId ? { ...g, name: trimmed } : g));
     await supabase.from('habit_groups').update({ name: trimmed }).eq('id', groupId);
   };
 
   const reorderGroups = (reordered: HabitGroup[]) => {
-    setGroups(reordered);
+    setCached(() => reordered);
     reordered.forEach((g, i) => {
       supabase.from('habit_groups').update({ position: i }).eq('id', g.id).then();
     });
@@ -72,8 +71,14 @@ export function useHabitGroups() {
       await supabase.from('habits').update({ archived: true }).eq('group_id', groupId).eq('user_id', user.id);
     }
     await supabase.from('habit_groups').delete().eq('id', groupId);
-    setGroups(prev => prev.filter(g => g.id !== groupId));
+    setCached(prev => prev.filter(g => g.id !== groupId));
+    // Habits referencing the group changed server-side (group_id nulled or archived),
+    // so refresh everything for this user except the groups list we just fixed up.
+    queryClient.invalidateQueries({
+      queryKey: qk.user(uid),
+      predicate: q => q.queryKey[2] !== 'groups',
+    });
   };
 
-  return { groups, loading, createGroup, renameGroup, reorderGroups, deleteGroup, refetch: fetchGroups };
+  return { groups, loading, createGroup, renameGroup, reorderGroups, deleteGroup, refetch };
 }

@@ -1,6 +1,7 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/app/AuthContext';
+import { qk } from '@/lib/queryKeys';
 
 export interface Profile {
   id: string;
@@ -14,28 +15,24 @@ const PROFILE_FIELDS = 'id, username, display_name, avatar_url, bio';
 
 export function useProfile() {
   const { user, loading: authLoading } = useAuth();
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const uid = user?.id ?? '';
+  const profileKey = qk.profile(uid);
 
-  const fetchProfile = useCallback(async () => {
-    if (!user) {
-      setProfile(null);
-      setLoading(false);
-      return;
-    }
-    const { data } = await supabase
-      .from('profiles')
-      .select(PROFILE_FIELDS)
-      .eq('id', user.id)
-      .maybeSingle();
-    setProfile((data ?? null) as Profile | null);
-    setLoading(false);
-  }, [user?.id]);
+  const { data: profile = null, isPending, refetch } = useQuery({
+    queryKey: profileKey,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select(PROFILE_FIELDS)
+        .eq('id', uid)
+        .maybeSingle();
+      return (data ?? null) as Profile | null;
+    },
+    enabled: !authLoading && !!user,
+  });
 
-  useEffect(() => {
-    if (authLoading) return;
-    fetchProfile();
-  }, [authLoading, fetchProfile]);
+  const loading = authLoading || (!!user && isPending);
 
   const updateProfile = async (patch: Partial<Omit<Profile, 'id'>>): Promise<string | null> => {
     if (!user) return 'Not signed in';
@@ -62,11 +59,11 @@ export function useProfile() {
       if (error.code === '23505') return 'That username is taken';
       return error.message;
     }
-    setProfile(data as Profile);
+    queryClient.setQueryData(profileKey, data as Profile);
     return null;
   };
 
-  return { profile, loading, updateProfile, refetch: fetchProfile };
+  return { profile, loading, updateProfile, refetch };
 }
 
 // Look up profiles by id, in bulk. Caller supplies a set of user_ids (e.g. from a feed query)
