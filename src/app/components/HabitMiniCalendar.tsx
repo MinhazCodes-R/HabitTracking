@@ -2,12 +2,18 @@ import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/app/AuthContext';
+import { withAutoDays } from '@/lib/habitState';
 
 const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const dayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
 // Miniature month calendar for a single habit — same shading scale as CalendarScreen.
-export function HabitMiniCalendar({ habitId, goal }: { habitId: string; goal: number }) {
+export function HabitMiniCalendar({ habitId, goal, isHabit = false, habitSince = null }: {
+  habitId: string;
+  goal: number;
+  isHabit?: boolean;
+  habitSince?: string | null;
+}) {
   const { user } = useAuth();
   const today = new Date();
   const [viewMonth, setViewMonth] = useState(today.getMonth());
@@ -31,7 +37,7 @@ export function HabitMiniCalendar({ habitId, goal }: { habitId: string; goal: nu
     if (!user) return;
     const mm = String(viewMonth + 1).padStart(2, '0');
     const from = `${viewYear}-${mm}-01`;
-    const to = `${viewYear}-${mm}-${daysInMonth}`;
+    const to = `${viewYear}-${mm}-${String(daysInMonth).padStart(2, '0')}`;
 
     supabase.from('habit_logs').select('date, value')
       .eq('habit_id', habitId).eq('user_id', user.id)
@@ -39,9 +45,9 @@ export function HabitMiniCalendar({ habitId, goal }: { habitId: string; goal: nu
       .then(({ data }) => {
         const map: Record<string, number> = {};
         (data ?? []).forEach(l => { map[l.date] = l.value; });
-        setLogs(map);
+        setLogs(withAutoDays({ goal, is_habit: isHabit, habit_since: habitSince }, map, from, to));
       });
-  }, [user, habitId, viewMonth, viewYear, daysInMonth]);
+  }, [user, habitId, viewMonth, viewYear, daysInMonth, goal, isHabit, habitSince]);
 
   const getCompletionLevel = (day: number) => {
     const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;

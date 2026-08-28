@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '../AuthContext';
 import { displayUnit, toLocalDateStr } from '@/lib/date';
 import { getIcon } from '@/lib/habitConfig';
+import { isAutoDone } from '@/lib/habitState';
 
 const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -78,9 +79,27 @@ export function CalendarScreen() {
       });
   }, [user, viewMonth, viewYear, daysInMonth]);
 
+  // Habits in the "Habit" state have no habit_logs rows — overlay them onto the fetched map
+  // so the grid, the month stats and the day sheet all agree with the Home screen.
+  const mergedLogs = useMemo(() => {
+    const autoHabits = habits.filter(h => h.is_habit);
+    if (autoHabits.length === 0) return dayLogs;
+
+    const next: Record<string, Record<string, number>> = {};
+    for (const [date, byHabit] of Object.entries(dayLogs)) next[date] = { ...byHabit };
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      for (const h of autoHabits) {
+        if (!isAutoDone(h, dateStr)) continue;
+        next[dateStr] = { ...(next[dateStr] ?? {}), [h.id]: h.goal };
+      }
+    }
+    return next;
+  }, [dayLogs, habits, viewMonth, viewYear, daysInMonth]);
+
   const getCompletionLevel = (day: number) => {
     const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    const logs = dayLogs[dateStr];
+    const logs = mergedLogs[dateStr];
     if (!logs) return 'bg-secondary';
 
     if (selectedHabit) {
@@ -108,18 +127,18 @@ export function CalendarScreen() {
     let logged = 0;
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const value = dayLogs[dateStr]?.[selectedHabit.id] ?? 0;
+      const value = mergedLogs[dateStr]?.[selectedHabit.id] ?? 0;
       if (value > 0) logged++;
       if (value >= goal) hit++;
     }
     return { hit, logged, total: daysInMonth };
-  }, [selectedHabit, dayLogs, viewMonth, viewYear, daysInMonth]);
+  }, [selectedHabit, mergedLogs, viewMonth, viewYear, daysInMonth]);
 
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const emptyDays = Array.from({ length: startingDayOfWeek }, (_, i) => i);
 
   const selectedDateStr = selectedDate ? `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}` : '';
-  const selectedLogs = selectedDateStr ? (dayLogs[selectedDateStr] ?? {}) : {};
+  const selectedLogs = selectedDateStr ? (mergedLogs[selectedDateStr] ?? {}) : {};
   const isFutureDate = selectedDateStr > todayStr;
   const canEditSelected = Boolean(selectedDateStr) && !isFutureDate;
 
@@ -253,7 +272,9 @@ export function CalendarScreen() {
                 filteredHabits.map(h => {
                   const current = selectedLogs[h.id] ?? 0;
                   const isBoolean = h.metric_type === 'boolean';
+                  const isAuto = isAutoDone(h, selectedDateStr);
                   const isDone = current >= h.goal;
+                  const canEdit = canEditSelected && !isAuto;
                   const unitLabel = displayUnit(h.metric_type, h.unit);
                   const step = h.increments?.[0] ?? 1;
                   return (
@@ -261,12 +282,12 @@ export function CalendarScreen() {
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-white">{h.name}</span>
                         <span className="text-sm text-muted-foreground">
-                          {current} / {h.goal}{unitLabel ? ` ${unitLabel}` : ''}
+                          {isAuto ? 'Habit' : `${current} / ${h.goal}${unitLabel ? ` ${unitLabel}` : ''}`}
                         </span>
                       </div>
                       {isBoolean ? (
                         <button
-                          disabled={!canEditSelected}
+                          disabled={!canEdit}
                           onClick={() => updateSelectedLog(h.id, isDone ? 0 : h.goal)}
                           className={`w-full py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                             isDone ? 'bg-green-400/20 text-green-400' : 'bg-secondary text-white hover:bg-accent'
@@ -277,14 +298,14 @@ export function CalendarScreen() {
                       ) : (
                         <div className="flex gap-2">
                           <button
-                            disabled={!canEditSelected}
+                            disabled={!canEdit}
                             onClick={() => updateSelectedLog(h.id, Math.max(current - step, 0))}
                             className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-secondary text-white hover:bg-accent transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                             <Minus className="w-4 h-4" />
                             {step}{unitLabel ? ` ${unitLabel}` : ''}
                           </button>
                           <button
-                            disabled={!canEditSelected}
+                            disabled={!canEdit}
                             onClick={() => updateSelectedLog(h.id, isDone ? 0 : h.goal)}
                             className={`flex-1 py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                               isDone ? 'bg-green-400/20 text-green-400' : 'bg-secondary text-white hover:bg-accent'
@@ -293,7 +314,7 @@ export function CalendarScreen() {
                             {isDone ? 'Done' : 'Complete'}
                           </button>
                           <button
-                            disabled={!canEditSelected}
+                            disabled={!canEdit}
                             onClick={() => updateSelectedLog(h.id, Math.min(current + step, h.goal))}
                             className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-secondary text-white hover:bg-accent transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                             <Plus className="w-4 h-4" />

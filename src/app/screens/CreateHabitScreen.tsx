@@ -4,6 +4,7 @@ import { X, Dumbbell, ChevronRight } from 'lucide-react';
 import { useHabits } from '@/hooks/useHabits';
 import { useHabitGroups } from '@/hooks/useHabitGroups';
 import { iconOptions, colorOptions, getIcon } from '@/lib/habitConfig';
+import { toLocalDateStr } from '@/lib/date';
 
 const categories = ['Health', 'Fitness', 'Study', 'Productivity', 'Mindfulness', 'Finance', 'Personal', 'Custom'];
 const NEW_GROUP_SENTINEL = '__new__';
@@ -28,6 +29,7 @@ export function CreateHabitScreen() {
   const [inc3, setInc3] = useState('');
   const [icon, setIcon] = useState('circle');
   const [color, setColor] = useState('#ffffff');
+  const [isHabitState, setIsHabitState] = useState(false);
 
   const isBoolean = metricType === 'Boolean';
   const SelectedIcon = getIcon(icon);
@@ -54,6 +56,8 @@ export function CreateHabitScreen() {
       increments: isBoolean ? [1] : [Number(inc1) || 10, Number(inc2) || 25, Number(inc3) || 50],
       icon,
       color,
+      is_habit: isHabitState,
+      habit_since: isHabitState ? toLocalDateStr(new Date()) : null,
     });
     navigate('/home');
   };
@@ -193,6 +197,23 @@ export function CreateHabitScreen() {
             </div>
           </>
         )}
+
+        <div className="space-y-2">
+          <label className="text-sm text-muted-foreground">State</label>
+          <button type="button" onClick={() => setIsHabitState(!isHabitState)}
+            className={`w-full text-left px-4 py-4 rounded-xl border transition-colors ${
+              isHabitState ? 'bg-green-400/10 border-green-400/40' : 'bg-input border-border hover:bg-accent'
+            }`}>
+            <span className={`block font-medium ${isHabitState ? 'text-green-400' : 'text-white'}`}>
+              {isHabitState ? 'Habit — always Done' : 'Tracked daily'}
+            </span>
+            <span className="block text-xs text-muted-foreground mt-1">
+              {isHabitState
+                ? 'Already part of your routine. Counts as done every day without checking in.'
+                : 'You check this off yourself each day. Switch to Habit once it sticks.'}
+            </span>
+          </button>
+        </div>
 
         <button type="submit" className="w-full py-4 bg-white text-black rounded-xl font-medium hover:bg-gray-100 transition-colors">
           Save Habit

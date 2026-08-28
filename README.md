@@ -44,6 +44,7 @@ src/
     supabase.ts          # Supabase client
     date.ts              # local-date helpers
     habitConfig.ts       # icon + color options
+    habitState.ts        # "Habit" state — auto-complete window helpers
   styles/                # tailwind, theme, fonts
 ```
 
@@ -59,6 +60,18 @@ Build for production:
 ```bash
 npm run build
 ```
+
+### Habit states
+
+A habit is either **tracked daily** (you tap Complete each day) or in the **Habit** state — one you
+have internalised and no longer want to check in on. A habit in the Habit state counts as Done for
+every day from `habit_since` onwards, on Home, the calendars and Analytics, with no `habit_logs`
+rows written. Switching back to daily tracking clears the window; days logged before `habit_since`
+are never rewritten. Set it when creating a habit, or from the habit's detail screen.
+
+Requires the `supabase-migration-habit-state.sql` migration.
+
+## Configuration
 
 A Supabase project is required. Set the following environment variables (e.g. in `.env`):
 

@@ -5,6 +5,7 @@ import { useAuth } from '../AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useState, useEffect } from 'react';
 import { toLocalDateStr } from '@/lib/date';
+import { isAutoDone } from '@/lib/habitState';
 
 export function AnalyticsScreen() {
   const { user } = useAuth();
@@ -24,13 +25,10 @@ export function AnalyticsScreen() {
       .gte('date', toLocalDateStr(weekAgo))
       .lte('date', toLocalDateStr(today))
       .then(({ data }) => {
-        const habitMap = new Map(habits.map(h => [h.id, h.goal]));
-        const dailyScores: Record<string, number[]> = {};
-
+        const logged: Record<string, Record<string, number>> = {};
         (data ?? []).forEach(l => {
-          if (!dailyScores[l.date]) dailyScores[l.date] = [];
-          const goal = habitMap.get(l.habit_id) ?? 1;
-          dailyScores[l.date].push(Math.min(l.value / goal, 1) * 100);
+          if (!logged[l.date]) logged[l.date] = {};
+          logged[l.date][l.habit_id] = l.value;
         });
 
         const weekly: number[] = [];
@@ -38,7 +36,13 @@ export function AnalyticsScreen() {
           const d = new Date(weekAgo);
           d.setDate(d.getDate() + i);
           const key = toLocalDateStr(d);
-          const scores = dailyScores[key] ?? [];
+          // Habits in the "Habit" state score 100 for every day in their window even though
+          // they never write a habit_logs row.
+          const scores = habits
+            .map(h => (isAutoDone(h, key) ? 100 : logged[key]?.[h.id] !== undefined
+              ? Math.min(logged[key][h.id] / (h.goal || 1), 1) * 100
+              : null))
+            .filter((v): v is number => v !== null);
           weekly.push(scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0);
         }
         setWeeklyData(weekly);
@@ -110,7 +114,7 @@ export function AnalyticsScreen() {
             <h3 className="text-white font-medium mb-4">Habits</h3>
             <div className="space-y-4">
               {habits.map(h => {
-                const pct = h.goal > 0 ? Math.round(Math.min(h.current / h.goal, 1) * 100) : 0;
+                const pct = h.is_habit ? 100 : h.goal > 0 ? Math.round(Math.min(h.current / h.goal, 1) * 100) : 0;
                 return (
                   <div key={h.id}>
                     <div className="flex items-center justify-between mb-2">

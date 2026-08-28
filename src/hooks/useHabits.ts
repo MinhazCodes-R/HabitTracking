@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/app/AuthContext';
 import { toLocalDateStr } from '@/lib/date';
+import { isAutoDone, withAutoDays } from '@/lib/habitState';
 
 export interface Habit {
   id: string;
@@ -17,6 +18,9 @@ export interface Habit {
   color: string;
   position: number;
   archived: boolean;
+  // "Habit" state: internalised, auto-counted as Done from habit_since onwards.
+  is_habit: boolean;
+  habit_since: string | null;
 }
 
 export interface HabitWithProgress extends Habit {
@@ -62,7 +66,11 @@ export function useHabits() {
       color: h.color ?? '#ffffff',
       position: h.position ?? 0,
       archived: h.archived ?? false,
-      current: logMap.get(h.id) ?? 0,
+      is_habit: h.is_habit ?? false,
+      habit_since: h.habit_since ?? null,
+      current: isAutoDone({ goal: h.goal, is_habit: h.is_habit ?? false, habit_since: h.habit_since ?? null }, today)
+        ? h.goal
+        : (logMap.get(h.id) ?? 0),
     })));
     setLoading(false);
   }, [user?.id, today]);
@@ -79,6 +87,16 @@ export function useHabits() {
     await fetchHabits();
   };
 
+  // Enter/leave the "Habit" state. Entering stamps habit_since with today so past days keep
+  // their real logs; leaving clears it and the habit goes back to manual tracking.
+  const setHabitState = async (habitId: string, isHabit: boolean) => {
+    const updates = { is_habit: isHabit, habit_since: isHabit ? today : null };
+    setHabits(prev => prev.map(h => h.id === habitId
+      ? { ...h, ...updates, current: isHabit ? h.goal : h.current }
+      : h));
+    await supabase.from('habits').update(updates).eq('id', habitId);
+  };
+
   const updateHabit = async (habitId: string, updates: Partial<Omit<Habit, 'id'>>) => {
     setHabits(prev => prev.map(h => h.id === habitId ? { ...h, ...updates } : h));
     supabase.from('habits').update(updates).eq('id', habitId).then();
@@ -93,6 +111,8 @@ export function useHabits() {
 
   const logProgress = async (habitId: string, value: number) => {
     if (!user) return;
+    // Habits in the "Habit" state are always Done — manual logging is a no-op.
+    if (habits.find(h => h.id === habitId)?.is_habit) return;
     setHabits(prev => prev.map(h => h.id === habitId ? { ...h, current: value } : h));
     supabase.from('habit_logs').upsert(
       { habit_id: habitId, user_id: user.id, date: today, value },
@@ -102,6 +122,8 @@ export function useHabits() {
 
   const logProgressForDate = async (habitId: string, value: number, date: string) => {
     if (!user) return;
+    const target = habits.find(h => h.id === habitId);
+    if (target && isAutoDone(target, date)) return;
     if (date === today) {
       setHabits(prev => prev.map(h => h.id === habitId ? { ...h, current: value } : h));
     }
@@ -125,7 +147,10 @@ export function useHabits() {
 
     const map: Record<string, number> = {};
     (data ?? []).forEach(l => { map[l.date] = l.value; });
-    return map;
+
+    const habit = habits.find(h => h.id === habitId);
+    if (!habit) return map;
+    return withAutoDays(habit, map, toLocalDateStr(from), toLocalDateStr(new Date()));
   };
 
   const archiveHabit = async (habitId: string) => {
@@ -137,14 +162,14 @@ export function useHabits() {
   // Binary habits go to value=goal (1); quantitative habits jump to their goal value.
   const logProgressForGroup = async (groupId: string) => {
     if (!user) return;
-    const targets = habits.filter(h => h.group_id === groupId && h.current < h.goal);
+    const targets = habits.filter(h => h.group_id === groupId && !h.is_habit && h.current < h.goal);
     if (targets.length === 0) return;
 
-    setHabits(prev => prev.map(h => h.group_id === groupId && h.current < h.goal ? { ...h, current: h.goal } : h));
+    setHabits(prev => prev.map(h => h.group_id === groupId && !h.is_habit && h.current < h.goal ? { ...h, current: h.goal } : h));
 
     const rows = targets.map(h => ({ habit_id: h.id, user_id: user.id, date: today, value: h.goal }));
     await supabase.from('habit_logs').upsert(rows, { onConflict: 'habit_id,date' });
   };
 
-  return { habits, setHabits, loading, createHabit, updateHabit, reorderHabits, logProgress, logProgressForDate, logProgressForGroup, getHabitLogs, archiveHabit, refetch: fetchHabits };
+  return { habits, setHabits, loading, createHabit, updateHabit, setHabitState, reorderHabits, logProgress, logProgressForDate, logProgressForGroup, getHabitLogs, archiveHabit, refetch: fetchHabits };
 }
