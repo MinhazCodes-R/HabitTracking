@@ -1,5 +1,5 @@
 import { Link } from 'react-router';
-import { CheckCircle, Plus } from 'lucide-react';
+import { CheckCircle, Plus, Infinity as InfinityIcon } from 'lucide-react';
 import { getIcon } from '@/lib/habitConfig';
 import { displayUnit } from '@/lib/date';
 
@@ -14,14 +14,15 @@ interface HabitCardProps {
   increments: number[];
   icon: string;
   color: string;
+  isHabit?: boolean;
   onDone: () => void;
   onIncrement: (amount: number) => void;
 }
 
-export function HabitCard({ id, name, category, metric_type, current, goal, unit, increments, icon, color, onDone, onIncrement }: HabitCardProps) {
+export function HabitCard({ id, name, category, metric_type, current, goal, unit, increments, icon, color, isHabit = false, onDone, onIncrement }: HabitCardProps) {
   const Icon = getIcon(icon);
   const isBoolean = metric_type === 'boolean';
-  const isDone = current >= goal;
+  const isDone = isHabit || current >= goal;
   const progress = Math.min((current / goal) * 100, 100);
   const unitLabel = displayUnit(metric_type, unit);
 
@@ -38,9 +39,17 @@ export function HabitCard({ id, name, category, metric_type, current, goal, unit
               <p className="text-sm text-muted-foreground capitalize">{category}</p>
             </div>
           </div>
+          {isHabit && (
+            <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-green-400/15 text-green-400 text-[11px] font-medium">
+              <InfinityIcon className="w-3 h-3" />
+              Habit
+            </span>
+          )}
         </div>
 
-        {isBoolean ? (
+        {isHabit ? (
+          <p className="text-sm font-medium text-green-400">Done — part of your routine</p>
+        ) : isBoolean ? (
           <p className={`text-sm font-medium ${isDone ? 'text-green-400' : 'text-muted-foreground'}`}>
             {isDone ? 'Done' : 'Not done'}
           </p>
@@ -57,6 +66,7 @@ export function HabitCard({ id, name, category, metric_type, current, goal, unit
         )}
       </Link>
 
+      {!isHabit && (
       <div className="flex gap-2 mt-4">
         <button onClick={(e) => { e.preventDefault(); onDone(); }}
           className={`flex-1 py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
@@ -74,6 +84,7 @@ export function HabitCard({ id, name, category, metric_type, current, goal, unit
           </button>
         )}
       </div>
+      )}
     </div>
   );
 }

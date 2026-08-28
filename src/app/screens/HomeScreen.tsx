@@ -51,6 +51,7 @@ function DraggableHabitCard({ habit, index, moveHabit, onDone, onIncrement }: {
         increments={habit.increments}
         icon={habit.icon}
         color={habit.color}
+        isHabit={habit.is_habit}
         onDone={onDone}
         onIncrement={onIncrement}
       />
@@ -116,11 +117,13 @@ export function HomeScreen() {
   const toggleCollapsed = (key: string) => setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
 
   const handleDone = (habit: HabitWithProgress) => {
+    if (habit.is_habit) return;
     const isDone = habit.current >= habit.goal;
     logProgress(habit.id, isDone ? 0 : habit.goal);
   };
 
   const handleIncrement = (habit: HabitWithProgress, amount: number) => {
+    if (habit.is_habit) return;
     const newValue = Math.min(habit.current + amount, habit.goal);
     logProgress(habit.id, newValue);
   };
@@ -193,7 +196,7 @@ export function HomeScreen() {
             buckets.map(({ group, habits: groupHabits }) => {
               const key = group?.id ?? UNGROUPED_BUCKET;
               const isCollapsed = !!collapsed[key];
-              const completed = groupHabits.filter(h => h.current >= h.goal).length;
+              const completed = groupHabits.filter(h => h.is_habit || h.current >= h.goal).length;
               return (
                 <section key={key}>
                   <GroupHeader
