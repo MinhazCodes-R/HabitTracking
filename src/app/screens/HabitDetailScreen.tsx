@@ -42,7 +42,7 @@ export function HabitDetailScreen() {
   const HabitIcon = getIcon(habit.icon);
   const isBoolean = habit.metric_type === 'boolean';
   const isHabitState = habit.is_habit;
-  const isDone = isHabitState || habit.current >= habit.goal;
+  const isDone = habit.current >= habit.goal;
   const progress = Math.min((habit.current / habit.goal) * 100, 100);
   const unitLabel = displayUnit(habit.metric_type, habit.unit);
 
@@ -174,25 +174,7 @@ export function HabitDetailScreen() {
 
       <div className="px-6 mb-6">
         <div className="bg-card rounded-2xl p-6 border border-border">
-          {isHabitState ? (
-            <>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-muted-foreground">Today's Status</span>
-                <span className="flex items-center gap-1.5 text-2xl font-medium text-green-400">
-                  <InfinityIcon className="w-5 h-5" />
-                  Done
-                </span>
-              </div>
-              <p className="text-sm text-muted-foreground mb-4">
-                This is in the <span className="text-green-400">Habit</span> state — it counts as done
-                every day{habit.habit_since ? ` since ${habit.habit_since}` : ''}, with nothing to tap.
-              </p>
-              <button onClick={() => setHabitState(habit.id, false)}
-                className="w-full py-3 rounded-xl font-medium bg-secondary text-white hover:bg-accent transition-colors">
-                Switch back to daily tracking
-              </button>
-            </>
-          ) : isBoolean ? (
+          {isBoolean ? (
             <>
               <div className="flex items-center justify-between mb-4">
                 <span className="text-muted-foreground">Today's Status</span>
@@ -281,17 +263,19 @@ export function HabitDetailScreen() {
         </div>
       </div>
 
-      {!isHabitState && (
-        <div className="px-6 mt-6">
-          <button onClick={() => setHabitState(habit.id, true)}
-            className="w-full py-4 rounded-xl font-medium text-green-400 bg-green-400/10 hover:bg-green-400/20 transition-colors flex items-center justify-center gap-2">
-            <InfinityIcon className="w-4 h-4" /> Mark as a Habit
-          </button>
-          <p className="text-xs text-muted-foreground text-center mt-2">
-            Stops the daily check-in — it counts as done from today onwards.
-          </p>
-        </div>
-      )}
+      <div className="px-6 mt-6">
+        <button onClick={() => setHabitState(habit.id, !isHabitState)}
+          className={`w-full py-4 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 ${
+            isHabitState ? 'bg-secondary text-white hover:bg-accent' : 'text-green-400 bg-green-400/10 hover:bg-green-400/20'
+          }`}>
+          <InfinityIcon className="w-4 h-4" /> {isHabitState ? 'Switch back to daily tracking' : 'Mark as a Habit'}
+        </button>
+        <p className="text-xs text-muted-foreground text-center mt-2">
+          {isHabitState
+            ? `Done by default every day${habit.habit_since ? ` since ${habit.habit_since}` : ''}. You can still flip any day to not done.`
+            : 'Each day starts as done from today onwards. You can still flip any day.'}
+        </p>
+      </div>
 
       {/* Delete Habit */}
       <div className="px-6 mt-6">

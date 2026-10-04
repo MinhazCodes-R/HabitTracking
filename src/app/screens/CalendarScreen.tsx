@@ -79,7 +79,7 @@ export function CalendarScreen() {
       });
   }, [user, viewMonth, viewYear, daysInMonth]);
 
-  // Habits in the "Habit" state have no habit_logs rows — overlay them onto the fetched map
+  // Habits in the "Habit" state default to Done without habit_logs rows — overlay them onto the fetched map
   // so the grid, the month stats and the day sheet all agree with the Home screen.
   const mergedLogs = useMemo(() => {
     const autoHabits = habits.filter(h => h.is_habit);
@@ -91,6 +91,7 @@ export function CalendarScreen() {
       const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       for (const h of autoHabits) {
         if (!isAutoDone(h, dateStr)) continue;
+        if (next[dateStr]?.[h.id] !== undefined) continue; // an explicit log overrides the default
         next[dateStr] = { ...(next[dateStr] ?? {}), [h.id]: h.goal };
       }
     }
@@ -112,7 +113,7 @@ export function CalendarScreen() {
     }
 
     if (filteredHabits.length === 0) return 'bg-secondary';
-    const relevant = Object.keys(logs).filter(id => filteredHabitIds.has(id));
+    const relevant = Object.keys(logs).filter(id => filteredHabitIds.has(id) && logs[id] > 0);
     const completed = relevant.length / filteredHabits.length;
     if (completed >= 0.8) return 'bg-white';
     if (completed >= 0.5) return 'bg-muted-foreground';
@@ -272,9 +273,8 @@ export function CalendarScreen() {
                 filteredHabits.map(h => {
                   const current = selectedLogs[h.id] ?? 0;
                   const isBoolean = h.metric_type === 'boolean';
-                  const isAuto = isAutoDone(h, selectedDateStr);
                   const isDone = current >= h.goal;
-                  const canEdit = canEditSelected && !isAuto;
+                  const canEdit = canEditSelected;
                   const unitLabel = displayUnit(h.metric_type, h.unit);
                   const step = h.increments?.[0] ?? 1;
                   return (
@@ -282,7 +282,7 @@ export function CalendarScreen() {
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-white">{h.name}</span>
                         <span className="text-sm text-muted-foreground">
-                          {isAuto ? 'Habit' : `${current} / ${h.goal}${unitLabel ? ` ${unitLabel}` : ''}`}
+                          {`${current} / ${h.goal}${unitLabel ? ` ${unitLabel}` : ''}`}
                         </span>
                       </div>
                       {isBoolean ? (

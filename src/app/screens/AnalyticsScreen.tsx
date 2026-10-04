@@ -36,12 +36,14 @@ export function AnalyticsScreen() {
           const d = new Date(weekAgo);
           d.setDate(d.getDate() + i);
           const key = toLocalDateStr(d);
-          // Habits in the "Habit" state score 100 for every day in their window even though
-          // they never write a habit_logs row.
+          // Habits in the "Habit" state default to 100 for every day in their window unless a
+          // habit_logs row overrides it.
           const scores = habits
-            .map(h => (isAutoDone(h, key) ? 100 : logged[key]?.[h.id] !== undefined
-              ? Math.min(logged[key][h.id] / (h.goal || 1), 1) * 100
-              : null))
+            .map(h => {
+              const v = logged[key]?.[h.id];
+              if (v !== undefined) return Math.min(v / (h.goal || 1), 1) * 100;
+              return isAutoDone(h, key) ? 100 : null;
+            })
             .filter((v): v is number => v !== null);
           weekly.push(scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0);
         }
@@ -114,7 +116,7 @@ export function AnalyticsScreen() {
             <h3 className="text-white font-medium mb-4">Habits</h3>
             <div className="space-y-4">
               {habits.map(h => {
-                const pct = h.is_habit ? 100 : h.goal > 0 ? Math.round(Math.min(h.current / h.goal, 1) * 100) : 0;
+                const pct = h.goal > 0 ? Math.round(Math.min(h.current / h.goal, 1) * 100) : 0;
                 return (
                   <div key={h.id}>
                     <div className="flex items-center justify-between mb-2">
