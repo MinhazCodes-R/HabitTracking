@@ -8,11 +8,13 @@ const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep
 const dayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
 // Miniature month calendar for a single habit — same shading scale as CalendarScreen.
-export function HabitMiniCalendar({ habitId, goal, isHabit = false, habitSince = null }: {
+export function HabitMiniCalendar({ habitId, goal, isHabit = false, habitSince = null, onSetDay }: {
   habitId: string;
   goal: number;
   isHabit?: boolean;
   habitSince?: string | null;
+  /** Persist a value for a date; when provided, past days and today can be tapped to toggle. */
+  onSetDay?: (date: string, value: number) => void;
 }) {
   const { user } = useAuth();
   const today = new Date();
@@ -58,6 +60,13 @@ export function HabitMiniCalendar({ habitId, goal, isHabit = false, habitSince =
     return 'bg-secondary text-muted-foreground';
   };
 
+  const toggleDay = (day: number) => {
+    const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const next = (logs[dateStr] ?? 0) >= goal ? 0 : goal;
+    setLogs(prev => ({ ...prev, [dateStr]: next }));
+    onSetDay?.(dateStr, next);
+  };
+
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const emptyDays = Array.from({ length: startingDayOfWeek }, (_, i) => i);
 
@@ -85,11 +94,13 @@ export function HabitMiniCalendar({ habitId, goal, isHabit = false, habitSince =
         {emptyDays.map((i) => <div key={`empty-${i}`} className="aspect-square" />)}
         {days.map((day) => {
           const isToday = day === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear();
+          const isFuture = new Date(viewYear, viewMonth, day) > today;
+          const editable = !!onSetDay && !isFuture;
           return (
-            <div key={day}
-              className={`aspect-square rounded-md flex items-center justify-center text-[10px] font-medium ${getCompletionLevel(day)} ${isToday ? 'ring-1 ring-white' : ''}`}>
+            <button key={day} type="button" disabled={!editable} onClick={() => toggleDay(day)}
+              className={`aspect-square rounded-md flex items-center justify-center text-[10px] font-medium ${getCompletionLevel(day)} ${isToday ? 'ring-1 ring-white' : ''} ${editable ? 'cursor-pointer' : 'cursor-default'}`}>
               {day}
-            </div>
+            </button>
           );
         })}
       </div>

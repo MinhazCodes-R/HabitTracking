@@ -12,7 +12,7 @@ const categories = ['health', 'fitness', 'study', 'productivity', 'mindfulness',
 export function HabitDetailScreen() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { habits, loading, logProgress, getHabitLogs, updateHabit, archiveHabit, setHabitState } = useHabits();
+  const { habits, loading, logProgress, getHabitLogs, updateHabit, archiveHabit, setHabitState, logProgressForDate } = useHabits();
   const { groups } = useHabitGroups();
   const [heatmapData, setHeatmapData] = useState<Record<string, number>>({});
   const [editingIncrements, setEditingIncrements] = useState(false);
@@ -244,7 +244,8 @@ export function HabitDetailScreen() {
       </div>
 
       <div className="px-6 mb-6">
-        <HabitMiniCalendar habitId={habit.id} goal={habit.goal} isHabit={habit.is_habit} habitSince={habit.habit_since} />
+        <HabitMiniCalendar habitId={habit.id} goal={habit.goal} isHabit={habit.is_habit} habitSince={habit.habit_since}
+          onSetDay={(date, value) => logProgressForDate(habit.id, value, date)} />
       </div>
 
       <div className="px-6">
