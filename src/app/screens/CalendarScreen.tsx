@@ -149,8 +149,8 @@ export function CalendarScreen() {
     setDayLogs(prev => {
       const next = { ...prev };
       const day = { ...(next[selectedDateStr] ?? {}) };
-      if (clamped === 0) delete day[habitId];
-      else day[habitId] = clamped;
+      // Keep an explicit 0 so it overrides a Habit-state habit's default-done day.
+      day[habitId] = clamped;
       next[selectedDateStr] = day;
       return next;
     });
