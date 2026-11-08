@@ -46,7 +46,15 @@ src/
     habitConfig.ts       # icon + color options
     habitState.ts        # "Habit" state — auto-complete window helpers
   styles/                # tailwind, theme, fonts
+mcp/                     # MCP server exposing the same data as assistant tools
 ```
+
+## MCP server
+
+`mcp/` is a [Model Context Protocol](https://modelcontextprotocol.io/) server that exposes habits,
+groups, journal entries and workouts as tools, so an assistant can read and update the same
+Supabase data the app uses. It signs in as you with the anon key, so row-level security still
+applies. See [`mcp/README.md`](mcp/README.md) for setup.
 
 ## Running the code
 
