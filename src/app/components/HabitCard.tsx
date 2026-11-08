@@ -22,7 +22,7 @@ interface HabitCardProps {
 export function HabitCard({ id, name, category, metric_type, current, goal, unit, increments, icon, color, isHabit = false, onDone, onIncrement }: HabitCardProps) {
   const Icon = getIcon(icon);
   const isBoolean = metric_type === 'boolean';
-  const isDone = isHabit || current >= goal;
+  const isDone = current >= goal;
   const progress = Math.min((current / goal) * 100, 100);
   const unitLabel = displayUnit(metric_type, unit);
 
@@ -47,9 +47,7 @@ export function HabitCard({ id, name, category, metric_type, current, goal, unit
           )}
         </div>
 
-        {isHabit ? (
-          <p className="text-sm font-medium text-green-400">Done — part of your routine</p>
-        ) : isBoolean ? (
+        {isBoolean ? (
           <p className={`text-sm font-medium ${isDone ? 'text-green-400' : 'text-muted-foreground'}`}>
             {isDone ? 'Done' : 'Not done'}
           </p>
@@ -66,7 +64,6 @@ export function HabitCard({ id, name, category, metric_type, current, goal, unit
         )}
       </Link>
 
-      {!isHabit && (
       <div className="flex gap-2 mt-4">
         <button onClick={(e) => { e.preventDefault(); onDone(); }}
           className={`flex-1 py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
@@ -84,7 +81,6 @@ export function HabitCard({ id, name, category, metric_type, current, goal, unit
           </button>
         )}
       </div>
-      )}
     </div>
   );
 }

@@ -1,24 +1,26 @@
 import { toLocalDateStr } from './date';
 
 // A habit in the "Habit" state is one the user has internalised — they no longer want to
-// tick it off every day. Every day from `habit_since` onwards counts as Done automatically,
-// without writing a habit_logs row. Days before `habit_since` keep whatever was logged.
+// tick it off every day. Every day from `habit_since` onwards defaults to Done without writing
+// a habit_logs row. A logged row (including 0) overrides that default, so any day can still be
+// flipped. Days before `habit_since` keep whatever was logged.
 export interface HabitStateFields {
   goal: number;
   is_habit: boolean;
   habit_since: string | null;
 }
 
-/** True when `dateStr` (YYYY-MM-DD) falls inside the habit's auto-complete window. */
+/** True when `dateStr` (YYYY-MM-DD) falls inside the habit's default-done window. */
 export function isAutoDone(habit: HabitStateFields, dateStr: string): boolean {
   if (!habit.is_habit || !habit.habit_since) return false;
   if (dateStr < habit.habit_since) return false;
   return dateStr <= toLocalDateStr(new Date());
 }
 
-/** The value to display for a date: the goal on auto days, otherwise what was logged. */
-export function effectiveValue(habit: HabitStateFields, dateStr: string, logged: number): number {
-  return isAutoDone(habit, dateStr) ? Math.max(logged, habit.goal) : logged;
+/** The value for a date: an explicit log wins; otherwise the goal on default-done days. */
+export function effectiveValue(habit: HabitStateFields, dateStr: string, logged: number | undefined): number {
+  if (logged !== undefined) return logged;
+  return isAutoDone(habit, dateStr) ? habit.goal : 0;
 }
 
 /**
@@ -43,7 +45,7 @@ export function withAutoDays(
   const last = new Date(`${end}T00:00:00`);
   while (cursor <= last) {
     const key = toLocalDateStr(cursor);
-    merged[key] = Math.max(merged[key] ?? 0, habit.goal);
+    if (merged[key] === undefined) merged[key] = habit.goal;
     cursor.setDate(cursor.getDate() + 1);
   }
   return merged;

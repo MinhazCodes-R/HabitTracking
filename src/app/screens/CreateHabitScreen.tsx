@@ -205,11 +205,11 @@ export function CreateHabitScreen() {
               isHabitState ? 'bg-green-400/10 border-green-400/40' : 'bg-input border-border hover:bg-accent'
             }`}>
             <span className={`block font-medium ${isHabitState ? 'text-green-400' : 'text-white'}`}>
-              {isHabitState ? 'Habit — always Done' : 'Tracked daily'}
+              {isHabitState ? 'Habit — Done by default' : 'Tracked daily'}
             </span>
             <span className="block text-xs text-muted-foreground mt-1">
               {isHabitState
-                ? 'Already part of your routine. Counts as done every day without checking in.'
+                ? 'Already part of your routine. Each day starts as done; you can still flip any day.'
                 : 'You check this off yourself each day. Switch to Habit once it sticks.'}
             </span>
           </button>
