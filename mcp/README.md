@@ -94,9 +94,9 @@ all its sets in one call), `get_workout_history`.
 - **Habits are addressable by name.** Every tool taking a `habit`, `group` or `workout` accepts
   either a uuid or a name. An ambiguous name is an error listing the matches rather than a guess.
 - **The Habit state is respected.** Habits in the `habit` state are reported as done for every day
-  in their window, and `log_habit` refuses to write to them — matching the app, where those habits
-  have no check-in button. Switch back to `daily` first if you really want to log one.
-- **Auto-complete days are derived, not stored.** History and summaries overlay them using the same
+  in their window *unless that day has an explicit log*. `log_habit` works on them like any other
+  habit, so `done=false` on a date marks that day not done — matching the app.
+- **Default-done days are derived, not stored.** History and summaries overlay them using the same
   `src/lib/habitState.ts` helpers the UI uses, so the numbers here always agree with the screens.
 - Requires the `supabase-migration-habit-state.sql` migration for the Habit state. Without it the
   server still runs — habits just all read as `daily`.

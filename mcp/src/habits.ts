@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { getSession, unwrap } from './client.js';
 import { HabitRow, json, normalizeHabit, resolveGroup, resolveHabit, text, today } from './shared.js';
-import { isAutoDone, withAutoDays } from '../../src/lib/habitState';
+import { effectiveValue, isAutoDone, withAutoDays } from '../../src/lib/habitState';
 import { toLocalDateStr } from '../../src/lib/date';
 
 const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
@@ -75,7 +75,7 @@ export function registerHabitTools(server: McpServer) {
         date: day,
         habits: habits.map(h => {
           const auto = isAutoDone(h, day);
-          const current = auto ? h.goal : byHabit.get(h.id) ?? 0;
+          const current = effectiveValue(h, day, byHabit.get(h.id));
           return {
             id: h.id,
             name: h.name,
@@ -88,7 +88,7 @@ export function registerHabitTools(server: McpServer) {
             current,
             goal: h.goal,
             done: current >= h.goal,
-            auto_complete: auto,
+            auto_complete: auto && !byHabit.has(h.id),
             archived: h.archived,
           };
         }),
@@ -111,7 +111,7 @@ export function registerHabitTools(server: McpServer) {
       const habit = await resolveHabit(db, user, ref, { includeArchived: true });
       const logs = await fetchLogs(habit, history_days ?? 30);
       const day = today();
-      const current = isAutoDone(habit, day) ? habit.goal : logs[day] ?? 0;
+      const current = effectiveValue(habit, day, logs[day]);
 
       return json({
         ...habit,
@@ -224,8 +224,8 @@ export function registerHabitTools(server: McpServer) {
       title: 'Log habit progress',
       description:
         'Record progress for a habit on a date (defaults to today). Pass `done` to complete it ' +
-        'outright, or `value` for a specific amount. Habits in the "habit" state are always done ' +
-        'and cannot be logged.',
+        'outright, or `value` for a specific amount. Habits in the "habit" state default to done ' +
+        'each day; log done=false (or value 0) on a date to mark that day not done.',
       inputSchema: {
         habit: z.string().describe('Habit name or id.'),
         value: z.number().min(0).optional().describe('Absolute value for the day.'),
@@ -240,12 +240,6 @@ export function registerHabitTools(server: McpServer) {
       const day = date ?? today();
 
       if (day > today()) throw new Error(`${day} is in the future.`);
-      if (isAutoDone(habit, day)) {
-        throw new Error(
-          `"${habit.name}" is in the Habit state (since ${habit.habit_since}) — it already counts as ` +
-            'done every day. Use set_habit_state to switch it back to daily tracking first.',
-        );
-      }
       if (value === undefined && done === undefined && add === undefined) {
         throw new Error('Pass one of value, done, or add.');
       }
@@ -382,7 +376,7 @@ export function registerHabitTools(server: McpServer) {
       const byHabit = new Map((logs as { habit_id: string; value: number }[]).map(l => [l.habit_id, l.value]));
 
       const rows = habits.map(h => {
-        const current = isAutoDone(h, day) ? h.goal : byHabit.get(h.id) ?? 0;
+        const current = effectiveValue(h, day, byHabit.get(h.id));
         return { name: h.name, current, goal: h.goal, done: current >= h.goal, state: h.is_habit ? 'habit' : 'daily' };
       });
       const done = rows.filter(r => r.done);
