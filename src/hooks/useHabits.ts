@@ -88,6 +88,19 @@ export function useHabits() {
   // Enter/leave the "Habit" state. Entering stamps habit_since with today so past days keep
   // their real logs; leaving clears it and the habit goes back to manual tracking.
   const setHabitState = async (habitId: string, isHabit: boolean) => {
+    // Leaving the Habit state drops the derived default-done days, so write them out as real
+    // logs first (never overwriting an existing row, e.g. an explicit not-done) to keep history.
+    const leaving = habits.find(h => h.id === habitId);
+    if (!isHabit && user && leaving?.is_habit && leaving.habit_since) {
+      const rows: { habit_id: string; user_id: string; date: string; value: number }[] = [];
+      const filled = withAutoDays(leaving, {}, leaving.habit_since, today);
+      for (const [date, value] of Object.entries(filled)) {
+        rows.push({ habit_id: habitId, user_id: user.id, date, value });
+      }
+      if (rows.length > 0) {
+        await supabase.from('habit_logs').upsert(rows, { onConflict: 'habit_id,date', ignoreDuplicates: true });
+      }
+    }
     const updates = { is_habit: isHabit, habit_since: isHabit ? today : null };
     setHabits(prev => prev.map(h => h.id === habitId
       ? { ...h, ...updates, current: isHabit ? h.goal : h.current }
